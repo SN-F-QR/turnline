@@ -1,0 +1,17 @@
+{
+  "scenario": "F02",
+  "source": "Captured from a dedicated no-private-content conversation in logged-in ChatGPT",
+  "capturedAt": "2026-09-25",
+  "browserVersion": "Chrome 153.0.0.0",
+  "pageType": "ChatGPT /c/<anonymized>",
+  "capture": "Two live data-turn-key subtrees copied from Chrome DevTools; parent chain and computed scroll style inspected on the same page.",
+  "sanitization": "Five UUIDs replaced consistently; 16 decorative SVG icons removed. Message text, unit hierarchy, headings, role labels, buttons and selector-bearing attributes remain from the capture.",
+  "layout": "Offline CSS reproduces observed thread-scroll-container overflow-y:auto and flex-direction:column-reverse; viewport height reduced to exercise scrolling.",
+  "observedCounts": {
+    "turnWrappers": 2,
+    "contentUnits": 4,
+    "userBubbles": 2,
+    "markdownBodies": 2
+  },
+  "limitation": "Static snapshot does not represent streaming, virtualization transitions, scheduled messages, or browser-generated CSS."
+}

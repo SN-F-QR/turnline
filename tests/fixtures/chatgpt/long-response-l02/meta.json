@@ -1,0 +1,23 @@
+{
+  "scenario": "F04/F05",
+  "source": "Real logged-in ChatGPT conversation supplied by the user; see L01/L02 in docs/chatgpt-cleanup-repair-plan.md",
+  "capturedAt": [
+    "2026-09-25T23:52:13.780Z"
+  ],
+  "pageType": "ChatGPT project conversation /g/<anonymized>/c/<anonymized>",
+  "capture": "Outer HTML of the live .thread-scroll-container",
+  "sanitization": "All UUIDs replaced consistently within the scenario; five remote image src URLs in L02 replaced by local SVG placeholders; ChatGPT account sidebar, composer, scripts and original conversation URL omitted.",
+  "layout": "Local CSS preserves observed 647px scroll viewport, overflow-y:auto and flex-direction:column-reverse; typography and image placeholders are approximations.",
+  "observed": [
+    {
+      "top": 0,
+      "height": 58872,
+      "client": 647,
+      "direction": "column-reverse",
+      "overflowY": "auto",
+      "turnWrappers": 5,
+      "contentUnits": 10
+    }
+  ],
+  "limitations": "The snapshot preserves actual DOM and long response text but cannot reproduce ChatGPT network loading or React hydration."
+}

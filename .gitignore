@@ -23,3 +23,10 @@ Thumbs.db
 # Chrome extension specific
 *.pem
 *.crx
+
+# Browser test artifacts
+playwright-report/
+test-results/
+
+# Local documents
+docs/local/

@@ -1,0 +1,9 @@
+/* Real ChatGPT turn DOM; reduced local layout based on observed scroll geometry. */
+html, body { margin: 0; height: 100%; font: 16px/1.55 system-ui; }
+main { height: 100vh; }
+.thread-scroll-container { height: 647px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column-reverse; }
+.thread-scroll-container > div { min-height: 100%; width: 100%; }
+[data-turn-key] { box-sizing: border-box; width: 100%; padding: 20px 28px; border-bottom: 1px solid #ddd; }
+[data-user-message-bubble], [data-markdown-text-style] { display: block; max-width: 760px; margin-inline: auto; }
+[data-markdown-text-style] img { max-width: 100%; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

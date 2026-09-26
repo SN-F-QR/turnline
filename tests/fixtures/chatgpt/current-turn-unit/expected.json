@@ -1,0 +1,27 @@
+{
+  "roles": [
+    "user",
+    "assistant",
+    "user",
+    "assistant"
+  ],
+  "prompts": [
+    "For a browser extension test, reply with exactly two Markdown headings, “## Orbit Alpha” and “### Orbit Beta”, and one short sentence under each. Use only invented content.",
+    "For the same browser exte\nnsion test, answer with one plain sentence and no heading. Mention only an invented green satellite."
+  ],
+  "headings": [
+    "Orbit Alpha",
+    "Orbit Beta"
+  ],
+  "responses": [
+    "A silver comet circles the imaginary planet Velora.",
+    "Three luminous moons drift above the floating city of Nareth.",
+    "A tiny green satellite named Velorin drifts silently through space."
+  ],
+  "absentText": [
+    "You said:",
+    "ChatGPT said:",
+    "Copy message",
+    "Regenerate response"
+  ]
+}

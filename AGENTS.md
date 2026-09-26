@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## Project Overview
 
@@ -25,6 +25,7 @@ Load `dist/` as an unpacked extension in Chrome (`chrome://extensions` with Deve
 ### Sidebar (`src/components/Sidebar.tsx`)
 
 The main component. Features:
+
 - Table of contents with two view levels: "Prompts" and "All" (includes responses + headings)
 - Search/filter within the sidebar
 - Click-to-navigate with smooth scrolling
@@ -41,13 +42,13 @@ The main component. Features:
 
 ### Utilities (`src/lib/`)
 
-| File | Purpose |
-|------|---------|
-| `scroll.ts` | Smooth scroll navigation with highlight animation |
-| `markdownUtil.ts` | DOM-to-markdown serialization, markdown rendering |
-| `download.ts` | File download helper |
-| `exportFilenames.ts` | Export filename generation |
-| `pdfPrint.ts` / `pdfStyles.ts` | PDF export via iframe print |
+| File                           | Purpose                                           |
+| ------------------------------ | ------------------------------------------------- |
+| `scroll.ts`                    | Smooth scroll navigation with highlight animation |
+| `markdownUtil.ts`              | DOM-to-markdown serialization, markdown rendering |
+| `download.ts`                  | File download helper                              |
+| `exportFilenames.ts`           | Export filename generation                        |
+| `pdfPrint.ts` / `pdfStyles.ts` | PDF export via iframe print                       |
 
 ### Types (`src/types/`)
 

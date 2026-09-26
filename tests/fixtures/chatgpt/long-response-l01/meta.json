@@ -1,0 +1,33 @@
+{
+  "scenario": "F15",
+  "source": "Real logged-in ChatGPT conversation supplied by the user; see L01/L02 in docs/chatgpt-cleanup-repair-plan.md",
+  "capturedAt": [
+    "2026-09-25T23:52:59.052Z",
+    "2026-09-25T23:53:26.432Z"
+  ],
+  "pageType": "ChatGPT project conversation /g/<anonymized>/c/<anonymized>",
+  "capture": "Outer HTML of the live .thread-scroll-container; L01 has cold and one upward-loaded state",
+  "sanitization": "All UUIDs replaced consistently across both states; ChatGPT account sidebar, composer, scripts and original conversation URL omitted.",
+  "layout": "Local CSS preserves observed 647px scroll viewport, overflow-y:auto and flex-direction:column-reverse; typography and image placeholders are approximations.",
+  "observed": [
+    {
+      "top": 0,
+      "height": 49595,
+      "client": 647,
+      "direction": "column-reverse",
+      "overflowY": "auto",
+      "turnWrappers": 5,
+      "contentUnits": 10
+    },
+    {
+      "top": -48889.5,
+      "height": 76874,
+      "client": 647,
+      "direction": "column-reverse",
+      "overflowY": "auto",
+      "turnWrappers": 5,
+      "contentUnits": 10
+    }
+  ],
+  "limitations": "Snapshots preserve actual DOM states and long response text but cannot reproduce ChatGPT network loading or React hydration; the replayed transition is controlled by the test helper."
+}

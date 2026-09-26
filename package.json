@@ -10,6 +10,12 @@
     "build:all": "vite build && node scripts/build-firefox.mjs",
     "firefox:run": "web-ext run -s dist-firefox",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json",
+    "test:unit": "node --test tests/unit/*.test.ts",
+    "test:ci": "npm run typecheck && npm run typecheck:tests && npm run test:unit",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:debug": "npm run build && playwright test --headed",
+    "test:check": "npm run typecheck && npm run typecheck:tests && npm run test:unit && npm run test:e2e",
     "preview": "vite preview",
     "package": "npm run build:all && cd dist && zip -r ../scroll-chrome.zip . && cd ../dist-firefox && zip -r ../scroll-firefox.zip ."
   },
@@ -33,6 +39,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/chrome": "^0.1.31",
     "@types/dompurify": "^3.0.5",
