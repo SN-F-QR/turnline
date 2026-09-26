@@ -127,6 +127,64 @@ test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]'
   })).toBe(true);
 });
 
+for (const layout of ['current', 'legacy', 'signed-in'] as const) {
+  test(`ChatGPT ${layout}: DIL card titles are omitted while document headings remain`, async ({ extensionContext, extensionPage }) => {
+    await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+    await extensionPage.evaluate((layout) => {
+      const content = document.querySelector<HTMLElement>('[data-markdown-text-style]')!;
+      // Minimal reproduction of the public DIL response structure. The entire
+      // response is not-prose, including its legitimate document headings.
+      const message = document.createElement('div');
+      message.setAttribute('data-message-author-role', 'assistant');
+      message.setAttribute('data-model-dil-v2-message', '');
+      message.innerHTML = `
+        <div><div class="puik-root not-prose not-markdown" data-dil-widget-copy-target>
+          <div data-d-direction="col">
+            <h1 data-d-component="title">Product comparison</h1>
+            <h2 data-d-component="title">Recommendations</h2>
+            <div data-d-component="box" data-d-has-border>
+              <h1 data-d-component="title">Example toothpaste brand</h1>
+              <div><h2 data-d-component="title">Card details</h2></div>
+            </div>
+            <h2 data-d-component="title">Concentration</h2>
+            <div data-d-component="box">
+              <h1 data-d-component="title">1,000–1,150 ppm</h1>
+            </div>
+          </div>
+        </div></div>
+        <div><h3>Ordinary nested heading</h3></div>`;
+      if (layout === 'signed-in') {
+        // Logged-in DOM supplied in the bug report: cards live inside the
+        // Markdown root and have no share-page widget-copy-target ancestor.
+        message.removeAttribute('data-model-dil-v2-message');
+        message.setAttribute('data-markdown-text-style', 'assistant-message');
+        const renderer = message.querySelector('[data-dil-widget-copy-target]')!;
+        renderer.removeAttribute('data-dil-widget-copy-target');
+        renderer.className = 'relative PortalBoundary-TFj9W2 Renderer-ojZscX';
+        renderer.setAttribute('data-theme', 'light');
+        renderer.firstElementChild!.className = 'DilRenderer-tB76Jj DilResponseRoot-HfQrEh LegacyReveal-lIiswq';
+      }
+      if (layout === 'legacy') {
+        const turn = content.closest('[data-turn-key]')!;
+        const legacyTurn = document.createElement('section');
+        legacyTurn.setAttribute('data-turn', 'assistant');
+        legacyTurn.setAttribute('data-testid', 'conversation-turn-dil');
+        legacyTurn.append(...turn.childNodes);
+        turn.replaceWith(legacyTurn);
+      }
+      content.replaceWith(message);
+    }, layout);
+    const sidebar = await openOutline(extensionPage);
+    for (const title of ['Product comparison', 'Recommendations', 'Concentration', 'Ordinary nested heading']) {
+      await expect(sidebar.getByRole('button', { name: title, exact: true })).toBeVisible();
+    }
+    for (const title of ['Example toothpaste brand', 'Card details', '1,000–1,150 ppm']) {
+      await expect(sidebar.getByRole('button', { name: title, exact: true })).toHaveCount(0);
+      await expect(extensionPage.getByRole('heading', { name: title, exact: true })).toHaveCount(1);
+    }
+  });
+}
+
 test('F06 text-node streaming updates the current outline [P4]', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);

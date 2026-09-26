@@ -10,10 +10,15 @@ const fallbackId = (node: HTMLElement) => {
 };
 
 const headingList = (content: HTMLElement) => {
-    const headings = Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).map((heading, index) => {
-        const text = (heading.innerText || heading.textContent || '').trim();
-        return { innerText: text || `Section ${index + 1}`, element: heading, tagName: heading.tagName, isPlaceholder: !text };
-    });
+    // DIL cards use heading tags for visual emphasis (product names, stats, etc.).
+    // Keep the renderer's document headings, but omit headings inside its boxes.
+    // Logged-in responses do not have the share page's widget-copy-target wrapper.
+    const headings = Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'))
+        .filter(heading => !heading.closest('[data-d-component="box"]'))
+        .map((heading, index) => {
+            const text = (heading.innerText || heading.textContent || '').trim();
+            return { innerText: text || `Section ${index + 1}`, element: heading, tagName: heading.tagName, isPlaceholder: !text };
+        });
     const levels = inferChatGptOutlineLevels(headings.map(h => ({ text: h.innerText, tagName: h.tagName })));
     return headings.map((heading, index) => ({ ...heading, outlineLevel: levels[index] }));
 };
