@@ -579,7 +579,7 @@
 }
 
 /* Focus marks the navigable row, never the whole conversation block. */
-.scroll-pro-sidebar-item:focus-visible > .scroll-pro-item-body > .scroll-pro-item-title,
+.scroll-pro-sidebar-item:focus-visible > .scroll-pro-item-body > .scroll-pro-item-header,
 .scroll-pro-subheading:focus-visible {
   outline: 1px solid var(--text-secondary);
   outline-offset: 2px;
@@ -594,21 +594,92 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 3px;
+}
+
+.scroll-pro-item-header {
+  display: flex;
+  align-items: center;
   gap: 4px;
+  margin: -2px -6px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  transition: color 120ms ease, background 120ms ease;
+  user-select: none;
+}
+
+.scroll-pro-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0 0 0 -2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.scroll-pro-item-header:hover .scroll-pro-collapse-btn,
+.scroll-pro-sidebar-item.is-reading .scroll-pro-collapse-btn {
+  color: var(--text-secondary);
+}
+
+.scroll-pro-collapse-btn:hover {
+  color: var(--text-primary) !important;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (prefers-color-scheme: light) {
+  .scroll-pro-collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
+}
+
+.scroll-pro-collapse-btn:focus-visible {
+  outline: 1px solid var(--text-secondary);
+  outline-offset: 1px;
+}
+
+.scroll-pro-collapse-icon {
+  width: 12px;
+  height: 12px;
+  transform: rotate(90deg);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+  transform-origin: center;
+}
+
+.scroll-pro-collapse-btn[aria-expanded="false"] .scroll-pro-collapse-icon {
+  transform: rotate(0deg);
+}
+
+.scroll-pro-collapse-spacer {
+  display: inline-block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0 0 0 -2px;
 }
 
 .scroll-pro-item-title {
-  margin: -2px -6px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
-  color: var(--text-secondary);
+  color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 120ms ease, background 120ms ease;
 }
 
 .scroll-pro-subheading-list {
@@ -643,7 +714,7 @@
 }
 
 /* Hover is a quiet, temporary cue; reading position owns the text emphasis. */
-.scroll-pro-item-title:hover,
+.scroll-pro-item-header:hover,
 .scroll-pro-subheading:hover {
   background: var(--hover-overlay);
 }
@@ -1034,7 +1105,7 @@
   color: var(--text-primary);
   background: var(--bg-item-active);
 }
-.scroll-pro-sidebar-item.is-reading > .scroll-pro-item-body > .scroll-pro-item-title,
+.scroll-pro-sidebar-item.is-reading > .scroll-pro-item-body > .scroll-pro-item-header,
 .scroll-pro-subheading.is-reading {
   color: var(--text-primary);
   background: var(--bg-item-active);

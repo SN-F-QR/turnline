@@ -131,3 +131,28 @@ test('F12 moving the toggle cleans host styles on cancel, close and unmount', as
         if (action === 'close') await toggle.click();
     }
 });
+
+test('prompt collapse hides only its answer outline and preserves it across view changes', async ({ extensionContext, extensionPage: page }) => {
+    await loadScenario(extensionContext, page, 'current-turn-unit');
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const sidebar = page.locator(sidebarSelector);
+    const first = sidebar.locator('[data-block-key]').first();
+    const last = sidebar.locator('[data-block-key]').last();
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(2);
+    await expect(last.locator('.scroll-pro-subheading')).toHaveCount(1);
+    await expect(first.locator('.scroll-pro-collapse-btn')).toHaveCount(1);
+    const position = await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop);
+    await first.getByRole('button', { name: 'Collapse answer outline' }).click();
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(0);
+    await expect(last.locator('.scroll-pro-subheading')).toHaveCount(1);
+    expect(await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(position);
+    await sidebar.getByRole('button', { name: 'Prompts', exact: true }).click();
+    await expect(sidebar.locator('.scroll-pro-collapse-btn')).toHaveCount(0);
+    await sidebar.getByRole('button', { name: 'All', exact: true }).click();
+    const expand = first.getByRole('button', { name: 'Expand answer outline' });
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await expand.focus();
+    await page.keyboard.press('Space');
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(2);
+    await expect(first.getByRole('button', { name: 'Collapse answer outline' })).toHaveAttribute('aria-expanded', 'true');
+});

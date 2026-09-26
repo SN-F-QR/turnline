@@ -234,6 +234,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     widthRef.current = width;
     const [showSettings, setShowSettings] = useState(false);
     const [search, setSearch] = useState('');
+    const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(() => new Set());
+    const conversationPath = window.location.pathname;
+    useEffect(() => { setCollapsedBlocks(new Set()); }, [providerName, conversationPath]);
     const [progress, setProgress] = useState(0);
     const [lineClamp, setLineClamp] = useState<number>(() => getLineClamp());
     const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -591,7 +594,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
 
         filteredBlocks.forEach((block) => {
             items.push({ key: block.key, kind: 'block', block });
-            if (showHeadings && block.answer) {
+            if (showHeadings && block.answer && !collapsedBlocks.has(block.key)) {
                 if (block.headings.length > 0) {
                     block.headings.forEach((h, idx) => {
                         if (getHeadingLevel(h) > depth) return;
@@ -603,7 +606,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             }
         });
         return items;
-    }, [filteredBlocks, viewLevel, depth]);
+    }, [filteredBlocks, viewLevel, depth, collapsedBlocks]);
 
     const focusIndexByKey = useMemo(() => {
         const map = new Map<string, number>();
@@ -781,7 +784,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             });
             const block = filteredBlocks.find(item => item.prompt?.id === turn?.id || item.answer?.id === turn?.id);
             let key = block?.key || null;
-            if (block && turn?.id === block.answer?.id && viewLevel === 2) {
+            if (block && turn?.id === block.answer?.id && viewLevel === 2 && !collapsedBlocks.has(block.key)) {
                 let index = -1;
                 block.headings.forEach((heading, i) => {
                     if (heading.element.isConnected && heading.element.getClientRects().length && heading.element.getBoundingClientRect().top <= line) index = i;
@@ -815,7 +818,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             window.removeEventListener('scroll', schedule, true);
             window.removeEventListener('resize', schedule);
         };
-    }, [container, isOpen, isPaused, turns, filteredBlocks, viewLevel, depth, history.status]);
+    }, [container, isOpen, isPaused, turns, filteredBlocks, viewLevel, depth, history.status, collapsedBlocks]);
 
     const previousFocusItems = useRef(focusableItems);
     useEffect(() => {
@@ -828,6 +831,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                 const parent = previous.block.headings.slice(0, originalIndex).map((heading, index) => ({ heading, index })).reverse().find(({ heading }) => getHeadingLevel(heading) <= depth);
                 const parentKey = parent ? `${previous.block.key}-heading-${parent.index}` : previous.block.key;
                 next = focusableItems.findIndex(item => item.key === parentKey);
+                if (next < 0) next = focusableItems.findIndex(item => item.key === previous.block.key);
             }
             if (next >= 0) { setFocusedIndex(next); return; }
         }
@@ -1382,6 +1386,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                             </div>
                         ) : filteredBlocks.map((block) => {
                             const focusIdx = focusIndexByKey.get(block.key) ?? -1;
+                            const isCollapsed = collapsedBlocks.has(block.key);
+                            const canCollapse = viewLevel === 2 && block.prompt && block.answer &&
+                                (block.headings.length > 0 ? block.headings.some(h => getHeadingLevel(h) <= depth) : !!block.answer.text);
                             return (
                                 <div
                                     key={block.key}
@@ -1415,10 +1422,50 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                     aria-selected={focusedIndex === focusIdx}
                                 >
                                     <div className="scroll-pro-item-body">
-                                        <p className="scroll-pro-item-title">
-                                            {block.title || '…'}
-                                        </p>
-                                        {viewLevel === 2 && block.answer && (
+                                        <div className="scroll-pro-item-header">
+                                            {viewLevel === 2 && (
+                                                canCollapse ? (
+                                                    <button
+                                                        type="button"
+                                                        className="scroll-pro-collapse-btn"
+                                                        aria-label={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
+                                                        aria-expanded={!isCollapsed}
+                                                        title={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFocusedIndex(focusIdx);
+                                                            setCollapsedBlocks(previous => {
+                                                                const next = new Set(previous);
+                                                                if (next.has(block.key)) next.delete(block.key);
+                                                                else next.add(block.key);
+                                                                return next;
+                                                            });
+                                                        }}
+                                                    >
+                                                        <svg
+                                                            aria-hidden="true"
+                                                            className="scroll-pro-collapse-icon"
+                                                            width="12"
+                                                            height="12"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2.2"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                        >
+                                                            <polyline points="9 18 15 12 9 6" />
+                                                        </svg>
+                                                    </button>
+                                                ) : (
+                                                    <span className="scroll-pro-collapse-spacer" aria-hidden="true" />
+                                                )
+                                            )}
+                                            <p className="scroll-pro-item-title">
+                                                {block.title || '…'}
+                                            </p>
+                                        </div>
+                                        {viewLevel === 2 && block.answer && !isCollapsed && (
                                             <div className="scroll-pro-subheading-list">
                                                 {block.headings.length > 0 ? (
                                                     block.headings.map((h, i) => {
@@ -1430,7 +1477,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                                                 key={headingKey}
                                                                 data-outline-level={getHeadingLevel(h)}
                                                                 title={h.innerText}
-                                                                style={{ paddingLeft: `${8 + (getHeadingLevel(h) - 1) * 12}px` }}
+                                                                style={{ paddingLeft: `${26 + (getHeadingLevel(h) - 1) * 12}px` }}
                                                                 ref={(el) => {
                                                                     if (el) {
                                                                         itemRefs.current.set(headingKey, el);
@@ -1465,6 +1512,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                                             }}
                                                             className={`scroll-pro-subheading ${focusedIndex === focusIndexByKey.get(`${block.key}-heading-0`) ? 'is-focused' : ''} ${activeKey === `${block.key}-heading-0` ? 'is-reading' : ''}`}
                                                             aria-current={activeKey === `${block.key}-heading-0` ? 'location' : undefined}
+                                                            style={{ paddingLeft: '26px' }}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const headingFocusIndex = focusIndexByKey.get(`${block.key}-heading-0`) ?? -1;
