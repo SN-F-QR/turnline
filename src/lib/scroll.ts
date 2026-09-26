@@ -35,7 +35,11 @@ const computeTargetPosition = (
   const rawTarget = containerIsWindow
     ? rect.top + window.scrollY
     : rect.top + scrollTop - (containerRect?.top ?? 0);
-  return Math.max(0, rawTarget - SCROLL_OFFSET);
+  if (containerIsWindow) return Math.max(0, rawTarget - SCROLL_OFFSET);
+  const element = scrollContainer as HTMLElement;
+  const range = Math.max(0, element.scrollHeight - element.clientHeight);
+  const reversed = window.getComputedStyle(element).flexDirection === 'column-reverse';
+  return Math.min(reversed ? 0 : range, Math.max(reversed ? -range : 0, rawTarget - SCROLL_OFFSET));
 };
 
 const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: number) => {

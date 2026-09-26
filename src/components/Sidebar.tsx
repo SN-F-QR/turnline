@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Turn } from '../types';
-import type { CapturedTurn, ExportBlock } from '../types/messages';
+import type { ExportBlock } from '../types/messages';
 import { scrollToElement } from '../lib/scroll';
 import { chatgpt } from '../providers/chatgpt';
 import { claude } from '../providers/claude';
@@ -11,6 +11,8 @@ import { downloadFile } from '../lib/download';
 import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
+import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
+import { chatgptMarkdown } from '../providers/chatgptContent';
 import DOMPurify from 'dompurify';
 const CONTEXT_HINT_KEY = 'scroll-pro-context-hint-seen';
 const LINE_CLAMP_KEY = 'scroll-pro-line-clamp';
@@ -554,48 +556,27 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
     const getTurnCopyText = useCallback((turn: Turn | undefined) => {
         if (!turn) return '';
-        if (!copyWithMarkdown) return turn.text || '';
-        if (!turn.element) return turn.text || '';
-        const raw = serializeNodeToMarkdown(turn.element);
+        if (!copyWithMarkdown) return (turn.contentElement?.innerText || stripMarkdown(turn.text) || '').trim();
+        const raw = serializeNodeToMarkdown(turn.contentElement || turn.element);
         const compact = raw.replace(/\n{3,}/g, '\n\n').trim();
         return compact || turn.text || '';
     }, [copyWithMarkdown]);
 
-    type Block = {
-        key: string;
-        prompt: Turn;
-        answer?: Turn;
-        headings: Turn['headings'];
-    };
-
-    const blocks: Block[] = useMemo(() => {
-        const list: Block[] = [];
-        for (let i = 0; i < turns.length; i++) {
-            const turn = turns[i];
-            if (turn.role !== 'user') continue;
-            const next = turns[i + 1];
-            const answer = next && next.role === 'assistant' ? next : undefined;
-            list.push({
-                key: `block-${turn.id}`,
-                prompt: turn,
-                answer,
-                headings: answer?.headings || [],
-            });
-        }
-        return list;
-    }, [turns]);
+    const blocks: Block[] = useMemo(() => buildConversationBlocks(turns), [turns]);
 
     const filteredBlocks = useMemo(() => {
         const term = search.toLowerCase().trim();
         const showHeadings = viewLevel === 2;
         return blocks.filter((block) => {
-            const promptText = (block.prompt.text || '').toLowerCase();
+            const promptText = (block.prompt?.text || block.title).toLowerCase();
             const answerText = (block.answer?.text || '').toLowerCase();
             const headingsText = block.headings.map((h) => h.innerText.toLowerCase()).join(' ');
             if (!term) return true;
             return (
                 promptText.includes(term) ||
                 answerText.includes(term) ||
+                (block.answer?.contextLabel || '').toLowerCase().includes(term) ||
+                (block.answer?.timeLabel || '').toLowerCase().includes(term) ||
                 (showHeadings && headingsText.includes(term))
             );
         });
@@ -632,51 +613,18 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
     const getCurrentExportBlocks = useCallback((): ExportBlock[] => {
         return blocks.map((block) => {
-            const promptText = block.prompt.element
-                ? serializeNodeToMarkdown(block.prompt.element)
-                : (block.prompt.text || '');
-
-            const answerText = block.answer?.element
-                ? serializeNodeToMarkdown(block.answer.element)
-                : (block.answer?.text || '');
+            const promptText = block.prompt ? chatgptMarkdown(block.prompt.contentElement || block.prompt.element) || block.prompt.text : undefined;
+            const answerText = block.answer ? chatgptMarkdown(block.answer.contentElement || block.answer.element) || block.answer.text : undefined;
 
             return {
-                prompt: promptText.trim(),
-                answer: answerText.trim(),
+                prompt: promptText?.trim(),
+                answer: answerText?.trim(),
                 headings: block.headings.map((h) => h.innerText),
+                kind: block.kind,
+                title: block.title,
             };
         });
     }, [blocks]);
-
-    const buildCapturedExportBlocks = useCallback((turnList: CapturedTurn[]): ExportBlock[] => {
-        const result: ExportBlock[] = [];
-        let pendingPrompt: string | null = null;
-
-        turnList.forEach((turn) => {
-            const text = turn?.text?.trim();
-            if (!text) return;
-
-            if (turn.role === 'user') {
-                if (pendingPrompt) {
-                    result.push({ prompt: pendingPrompt });
-                }
-                pendingPrompt = text;
-            } else {
-                if (pendingPrompt !== null) {
-                    result.push({ prompt: pendingPrompt, answer: text });
-                    pendingPrompt = null;
-                } else {
-                    result.push({ prompt: 'User', answer: text });
-                }
-            }
-        });
-
-        if (pendingPrompt) {
-            result.push({ prompt: pendingPrompt });
-        }
-
-        return result;
-    }, []);
 
     const exportChat = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat, exportBlocks?: ExportBlock[]) => {
         const turns = exportBlocks ?? getCurrentExportBlocks();
@@ -692,8 +640,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             lines.push(`# Chat Export (${providerName}) - ${new Date().toLocaleString()}`, '');
             turns.forEach((block, idx) => {
                 lines.push(`## Turn ${idx + 1}`, '');
-                lines.push('**User**');
-                lines.push(block.prompt || '…', '');
+                if (block.prompt !== undefined) lines.push('**User**', block.prompt || '…', '');
                 if (block.answer) {
                     lines.push('**Assistant**');
                     lines.push(block.answer || '…', '');
@@ -708,10 +655,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             const lines: string[] = [];
             lines.push(`CHAT EXPORT (${providerName})`, `Exported: ${new Date().toLocaleString()}`, '', '='.repeat(60), '');
             turns.forEach((block, idx) => {
-                const promptPlain = stripMarkdown(block.prompt);
+                const promptPlain = stripMarkdown(block.prompt || '');
                 const answerPlain = stripMarkdown(block.answer || '');
 
-                lines.push(`[${idx + 1}] User:`, promptPlain || '…', '');
+                lines.push(`[${idx + 1}]${block.prompt !== undefined ? ' User:' : ''}`);
+                if (block.prompt !== undefined) lines.push(promptPlain || '…', '');
                 if (block.answer) {
                     lines.push('Assistant:', answerPlain || '…', '');
                 }
@@ -727,9 +675,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 provider: providerName,
                 url: window.location.href,
                 turns: turns.map((block) => ({
-                    prompt: block.prompt,
+                    prompt: block.prompt ?? null,
                     response: block.answer || '',
                     headings: block.headings || [],
+                    kind: block.kind,
+                    title: block.title,
                 })),
             };
             downloadFile(JSON.stringify(data, null, 2), 'application/json', filename);
@@ -738,8 +688,8 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         if (format === 'pdf') {
             const renderedTurns = await Promise.all(turns.map(async (block) => ({
-                promptHtml: await renderMarkdownToHtml(block.prompt || '…'),
-                answerHtml: await renderMarkdownToHtml(block.answer || '…')
+                promptHtml: block.prompt !== undefined ? await renderMarkdownToHtml(block.prompt || '…') : '',
+                answerHtml: block.answer !== undefined ? await renderMarkdownToHtml(block.answer || '…') : ''
             })));
 
             const body = `
@@ -755,10 +705,10 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                     .map(
                         (block) => `
                     <div class="turn">
-                      <div class="content-section">
+                      ${block.promptHtml ? `<div class="content-section">
                         <div class="section-label">You</div>
                         <div class="prompt">${block.promptHtml}</div>
-                      </div>
+                      </div>` : ''}
                       ${block.answerHtml
                                 ? `<div class="content-section">
                         <div class="section-label">Assistant</div>
@@ -784,11 +734,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             const MAX_WAIT = 2500; // Max wait time per block
 
             while (Date.now() - start < MAX_WAIT) {
-                const promptEl = block.prompt.element?.querySelector('[data-message-author-role="user"]');
-                const answerEl = block.answer?.element?.querySelector('[data-message-author-role="assistant"]');
+                const promptEl = block.prompt?.contentElement;
+                const answerEl = block.answer?.contentElement;
 
-                const hasPrompt = !block.prompt.element || (promptEl as HTMLElement)?.innerText?.trim().length > 0;
-                const hasAnswer = !block.answer?.element || (answerEl as HTMLElement)?.innerText?.trim().length > 0;
+                const hasPrompt = !block.prompt || !!(promptEl?.textContent?.trim() || block.prompt.text.trim());
+                const hasAnswer = !block.answer || !!(answerEl?.textContent?.trim() || block.answer.text.trim());
 
                 if (hasPrompt && hasAnswer) {
                     await sleep(50);
@@ -921,28 +871,30 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 subText.textContent = `~${estimatedSeconds}s`;
                 progressBar.style.width = `${Math.round(((i + 1) / totalBlocks) * 100)}%`;
 
-                const targetElement = block.prompt.element || block.answer?.element;
+                const targetElement = block.prompt?.element || block.answer?.element;
                 if (targetElement) {
                     scrollToElement(targetElement);
                     await waitForHydration(block);
                 }
 
                 // Use specific selectors to avoid capturing role headers
-                const promptEl = block.prompt.element?.querySelector('[data-message-author-role="user"]');
-                const promptText = (promptEl as HTMLElement)?.innerText?.trim() || block.prompt.text || '';
+                const promptEl = block.prompt?.contentElement;
+                const promptText = block.prompt?.text || '';
 
-                const answerEl = block.answer?.element?.querySelector('[data-message-author-role="assistant"]');
-                const answerText = (answerEl as HTMLElement)?.innerText?.trim() || block.answer?.text || '';
+                const answerEl = block.answer?.contentElement;
+                const answerText = block.answer?.text || '';
 
                 const headings = block.headings?.map(h => h.innerText?.trim() || '').filter(Boolean) || [];
 
-                const promptMarkdown = promptEl ? serializeNodeToMarkdown(promptEl) : promptText;
-                const answerMarkdown = answerEl ? serializeNodeToMarkdown(answerEl) : answerText;
+                const promptMarkdown = promptEl ? chatgptMarkdown(promptEl) : promptText;
+                const answerMarkdown = answerEl ? chatgptMarkdown(answerEl) : answerText;
 
                 exportBlocks.push({
-                    prompt: promptMarkdown || promptText,
-                    answer: answerMarkdown || answerText,
+                    prompt: block.prompt ? promptMarkdown || promptText : undefined,
+                    answer: block.answer ? answerMarkdown || answerText : undefined,
                     headings,
+                    kind: block.kind,
+                    title: block.title,
                 });
             }
 
@@ -952,11 +904,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         }
     }, [blocks, showToast]);
 
-    const startExport = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat) => {
+    const startExport = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat, consentJustGranted = false) => {
         if (captureInProgressRef.current) return;
 
         if (providerName === 'chatgpt') {
-            if (!hasCaptureConsent) {
+            if (!hasCaptureConsent && !consentJustGranted) {
                 setShowCaptureConsent(true);
                 return;
             }
@@ -986,7 +938,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         }
         setHasCaptureConsent(true);
         setShowCaptureConsent(false);
-        startExport(exportFormat);
+        startExport(exportFormat, true);
     }, [exportFormat, startExport]);
 
     const handleConsentDismiss = useCallback(() => {
@@ -1028,7 +980,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                         if (visibleTurnIndex >= 0) {
                             const turn = turns[visibleTurnIndex];
                             const itemIndex = focusableItems.findIndex(item =>
-                                item.kind === 'block' && item.block.prompt.id === turn.id
+                                item.kind === 'block' && (item.block.prompt?.id === turn.id || item.block.answer?.id === turn.id)
                             );
 
                             if (itemIndex >= 0 && itemIndex !== focusedIndex) {
@@ -1055,7 +1007,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             if (visibleTurnIndex >= 0) {
                 const turn = turns[visibleTurnIndex];
                 const itemIndex = focusableItems.findIndex(item =>
-                    item.kind === 'block' && item.block.prompt.id === turn.id
+                    item.kind === 'block' && (item.block.prompt?.id === turn.id || item.block.answer?.id === turn.id)
                 );
                 if (itemIndex >= 0) {
                     setFocusedIndex(itemIndex);
@@ -1171,12 +1123,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const handleCopyFullChat = useCallback(() => {
         const lines: string[] = [];
         blocks.forEach((block) => {
-            const promptText = getTurnCopyText(block.prompt);
-            lines.push(`User: ${promptText}`, '');
+            if (block.prompt) lines.push(`User: ${getTurnCopyText(block.prompt)}`, '');
             if (block.answer) {
                 const answerText = getTurnCopyText(block.answer);
-                lines.push(`Assistant: ${answerText}`, '', '---', '');
+                lines.push(`Assistant: ${answerText}`, '');
             }
+            lines.push('---', '');
         });
         const fullText = lines.join('\n');
         copyToClipboard(fullText);
@@ -1283,7 +1235,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         };
 
         const onCopyQA = () => {
-            if (!block.answer) return;
+            if (!block.prompt || !block.answer) return;
             const promptText = getTurnCopyText(block.prompt);
             const answerText = getTurnCopyText(block.answer);
             const text = `Q: ${promptText}\n\nA: ${answerText}`;
@@ -1310,10 +1262,10 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 <button className="scroll-pro-context-item" onClick={onCopyResponse} disabled={!hasAnswer}>
                     <span className="scroll-pro-context-label">Copy response</span>
                 </button>
-                <button className="scroll-pro-context-item" onClick={onCopyQA} disabled={!hasAnswer}>
+                <button className="scroll-pro-context-item" onClick={onCopyQA} disabled={!block.prompt || !hasAnswer}>
                     <span className="scroll-pro-context-label">Copy Q&A</span>
                 </button>
-                <button className="scroll-pro-context-item" onClick={onCopyPrompt}>
+                <button className="scroll-pro-context-item" onClick={onCopyPrompt} disabled={!block.prompt}>
                     <span className="scroll-pro-context-label">Copy prompt</span>
                 </button>
                 <div className="scroll-pro-context-divider" role="separator" />
@@ -1415,12 +1367,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 action: () => {
                     const lines: string[] = [];
                     blocks.forEach((block) => {
-                        const promptText = block.prompt.text || '';
-                        lines.push(`User: ${promptText}`, '');
+                        if (block.prompt) lines.push(`User: ${block.prompt.contentElement?.innerText || stripMarkdown(block.prompt.text)}`, '');
                         if (block.answer) {
-                            const answerText = block.answer.text || '';
-                            lines.push(`Assistant: ${answerText}`, '', '---', '');
+                            const answerText = block.answer.contentElement?.innerText || stripMarkdown(block.answer.text);
+                            lines.push(`Assistant: ${answerText}`, '');
                         }
+                        lines.push('---', '');
                     });
                     copyToClipboard(lines.join('\n'));
                     showToast('Full chat copied (plain text)');
@@ -1432,16 +1384,15 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 action: () => {
                     const lines: string[] = [];
                     blocks.forEach((block) => {
-                        const promptText = block.prompt.element
-                            ? serializeNodeToMarkdown(block.prompt.element).replace(/\n{3,}/g, '\n\n').trim()
-                            : block.prompt.text || '';
-                        lines.push(`**User:** ${promptText}`, '');
-                        if (block.answer) {
-                            const answerText = block.answer.element
-                                ? serializeNodeToMarkdown(block.answer.element).replace(/\n{3,}/g, '\n\n').trim()
-                                : block.answer.text || '';
-                            lines.push(`**Assistant:** ${answerText}`, '', '---', '');
+                        if (block.prompt) {
+                            const promptText = chatgptMarkdown(block.prompt.contentElement || block.prompt.element) || block.prompt.text;
+                            lines.push(`**User:** ${promptText}`, '');
                         }
+                        if (block.answer) {
+                            const answerText = chatgptMarkdown(block.answer.contentElement || block.answer.element) || block.answer.text;
+                            lines.push(`**Assistant:** ${answerText}`, '');
+                        }
+                        lines.push('---', '');
                     });
                     copyToClipboard(lines.join('\n'));
                     showToast('Full chat copied (markdown)');
@@ -1455,8 +1406,10 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                         provider: providerName,
                         url: window.location.href,
                         turns: blocks.map((block) => ({
-                            prompt: block.prompt.text || '',
+                            prompt: block.prompt?.text ?? null,
                             response: block.answer?.text || '',
+                            kind: block.kind,
+                            title: block.title,
                         })),
                     };
                     copyToClipboard(JSON.stringify(data, null, 2));
@@ -1655,7 +1608,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                     onClick={() => {
                                         if (contextMenu) return;
                                         if (focusIdx >= 0) setFocusedIndex(focusIdx);
-                                        scrollToElement(block.prompt.element || block.answer?.element);
+                                        scrollToElement(block.prompt?.element || block.answer?.element);
                                     }}
                                     onContextMenu={(e) => {
                                         e.preventDefault();
@@ -1671,7 +1624,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                 >
                                     <div className="scroll-pro-item-body">
                                         <p className="scroll-pro-item-title">
-                                            {block.prompt.text || '…'}
+                                            {block.title || '…'}
                                         </p>
                                         {viewLevel === 2 && block.answer && (
                                             <div className="scroll-pro-subheading-list">

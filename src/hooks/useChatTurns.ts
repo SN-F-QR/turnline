@@ -1,174 +1,108 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Provider, Turn } from '../types';
+import { useEffect, useState } from 'react';
+import type { Provider, Turn } from '../types';
 import { chatgpt } from '../providers/chatgpt';
 import { claude } from '../providers/claude';
 import { gemini } from '../providers/gemini';
+import { CHATGPT_TURN_SELECTOR } from '../providers/chatgptContent';
 
 const PROVIDERS: Provider[] = [chatgpt, claude, gemini];
-
 const TURN_SELECTORS: Record<Provider['name'], string> = {
-    chatgpt: 'section[data-turn], section[data-testid^="conversation-turn"], article[data-turn], article[data-testid^="conversation-turn"], [data-message-author-role]',
+    chatgpt: CHATGPT_TURN_SELECTOR,
     claude: '[data-testid="conversation-turn"], [data-testid="user-message"], [data-testid="assistant-response"], [data-testid="assistant-message"], .font-user-message, .font-claude-response',
-    gemini: 'user-query, model-response'
+    gemini: 'user-query, model-response',
 };
-
-const hasTurns = (provider: Provider, root: ParentNode) =>
-    root.querySelector(TURN_SELECTORS[provider.name]) !== null;
 
 export function useChatTurns() {
     const [turns, setTurns] = useState<Turn[]>([]);
-    const [provider, setProvider] = useState<Provider | null>(null);
+    const [provider] = useState<Provider | null>(() => PROVIDERS.find(p => p.isMatch()) || null);
     const [container, setContainer] = useState<HTMLElement | null>(null);
-    const observerRef = useRef<MutationObserver | null>(null);
-    const bodyObserverRef = useRef<MutationObserver | null>(null);
-    const headingCacheRef = useRef<Map<string, string>>(new Map());
-    const turnTextCacheRef = useRef<Map<string, string>>(new Map());
-
-    useEffect(() => {
-        const handleChatChange = () => {
-            headingCacheRef.current.clear();
-            turnTextCacheRef.current.clear();
-            setTurns([]);
-        };
-
-        window.addEventListener('scroll:chatChanged', handleChatChange);
-        return () => window.removeEventListener('scroll:chatChanged', handleChatChange);
-    }, []);
-
-    useEffect(() => {
-        const matched = PROVIDERS.find(p => p.isMatch());
-        setProvider(matched || null);
-    }, []);
-
-    const findContainer = useCallback(() => {
-        if (!provider) return null;
-
-        const turnSelector = TURN_SELECTORS[provider.name];
-        const hasAnyTurns = hasTurns(provider, document);
-
-        if (container && container.isConnected) {
-            if (hasTurns(provider, container) || !hasAnyTurns) {
-                return container;
-            }
-        }
-
-        const candidates = Array.from(document.querySelectorAll<HTMLElement>(provider.scrollContainerSelector));
-        let bestCandidate: HTMLElement | null = null;
-        let bestCount = 0;
-
-        candidates.forEach((candidate) => {
-            const count = candidate.querySelectorAll(turnSelector).length;
-            if (count > bestCount) {
-                bestCount = count;
-                bestCandidate = candidate;
-            }
-        });
-
-        if (bestCandidate && bestCount > 0) {
-            return bestCandidate;
-        }
-
-        return (document.querySelector('main') as HTMLElement | null) || document.body;
-    }, [provider, container]);
 
     useEffect(() => {
         if (!provider) return;
-
-        const checkContainer = () => {
-            const found = findContainer();
-            if (found && found !== container) {
-                setContainer(found);
-            }
-        };
-
-        checkContainer();
-
-        bodyObserverRef.current = new MutationObserver(checkContainer);
-        bodyObserverRef.current.observe(document.body, { childList: true, subtree: true });
-
-        return () => bodyObserverRef.current?.disconnect();
-    }, [provider, container, findContainer]);
-
-    useEffect(() => {
-        if (!provider || !container) return;
+        let currentContainer: HTMLElement | null = null;
+        let turnObserver: MutationObserver | null = null;
+        let frame = 0;
+        let lastUrl = location.href;
+        const selector = TURN_SELECTORS[provider.name];
+        const textCache = new Map<string, string>();
+        const headingCache = new Map<string, string>();
 
         const parse = () => {
-            const newTurns = provider.getTurns(container);
-
+            frame = 0;
+            if (!currentContainer) return;
+            const next = provider.getTurns(currentContainer);
             if (provider.name === 'chatgpt') {
-                newTurns.forEach((turn, turnIdx) => {
-                    if (turn.text && turn.text.trim()) {
-                        turnTextCacheRef.current.set(turn.id, turn.text);
-                    } else {
-                        const cachedText = turnTextCacheRef.current.get(turn.id);
-                        if (cachedText) {
-                            turn.text = cachedText;
-                        }
-                    }
-
-                    turn.headings.forEach((heading, headingIdx) => {
-                        const cacheKey = `${turn.id}-${headingIdx}`;
-
-                        if (!heading.isPlaceholder && heading.innerText) {
-                            headingCacheRef.current.set(cacheKey, heading.innerText);
-                        }
-                        else if (heading.isPlaceholder) {
-                            const cached = headingCacheRef.current.get(cacheKey);
-                            if (cached) {
-                                heading.innerText = cached;
-                                heading.isPlaceholder = false;
-                            }
+                for (const turn of next) {
+                    const key = `${location.href}:${turn.id}`;
+                    if (turn.text.trim()) textCache.set(key, turn.text);
+                    else if (turn.turnId) turn.text = textCache.get(key) || '';
+                    turn.headings.forEach((heading, index) => {
+                        const headingKey = `${key}:${index}`;
+                        if (!heading.isPlaceholder) headingCache.set(headingKey, heading.innerText);
+                        else if (turn.turnId && headingCache.has(headingKey)) {
+                            heading.innerText = headingCache.get(headingKey)!;
+                            heading.isPlaceholder = false;
                         }
                     });
-                });
+                }
             }
-
-            setTurns(newTurns);
+            setTurns(next);
+        };
+        const scheduleParse = () => {
+            if (!frame) frame = requestAnimationFrame(parse);
+        };
+        const check = () => {
+            if (location.href !== lastUrl) {
+                lastUrl = location.href;
+                textCache.clear();
+                headingCache.clear();
+                setTurns([]);
+                turnObserver?.disconnect();
+                currentContainer = null;
+            }
+            const candidates = Array.from(document.querySelectorAll<HTMLElement>(provider.scrollContainerSelector));
+            let best: HTMLElement | null = null;
+            let count = 0;
+            for (const candidate of candidates) {
+                const found = candidate.querySelectorAll(selector).length;
+                if (found > 0 && found >= count) {
+                    count = found;
+                    best = candidate;
+                }
+            }
+            const nextContainer = best || document.querySelector<HTMLElement>('main') || document.body;
+            if (nextContainer !== currentContainer) {
+                turnObserver?.disconnect();
+                currentContainer = nextContainer;
+                setContainer(nextContainer);
+                turnObserver = new MutationObserver(scheduleParse);
+                turnObserver.observe(nextContainer, {
+                    childList: true, characterData: true, subtree: true,
+                    attributes: true,
+                    attributeFilter: ['data-turn-key', 'data-content-search-unit-key', 'data-message-author-role', 'data-markdown-text-style'],
+                });
+                scheduleParse();
+            }
         };
 
-        parse();
-
-        observerRef.current = new MutationObserver(() => {
-            parse();
+        check();
+        const bodyObserver = new MutationObserver(() => {
+            check();
+            scheduleParse();
         });
-
-        observerRef.current.observe(container, { childList: true, subtree: true });
-
-        return () => observerRef.current?.disconnect();
-    }, [provider, container]);
-
-    // Periodic refresh for ChatGPT virtualized content
-    useEffect(() => {
-        if (!provider || !container || provider.name !== 'chatgpt') return;
-
-        const hasPlaceholders = turns.some(turn =>
-            turn.headings.some(h => h.isPlaceholder)
-        );
-
-        if (!hasPlaceholders) return;
-
-        const intervalId = setInterval(() => {
-            const newTurns = provider.getTurns(container);
-
-            const hasChanges = newTurns.some((newTurn, idx) => {
-                const oldTurn = turns[idx];
-                if (!oldTurn) return true;
-
-                return newTurn.headings.some((newHeading, hIdx) => {
-                    const oldHeading = oldTurn.headings[hIdx];
-                    if (!oldHeading) return true;
-
-                    return oldHeading.isPlaceholder && !newHeading.isPlaceholder;
-                });
-            });
-
-            if (hasChanges) {
-                setTurns(newTurns);
-            }
-        }, 2000);
-
-        return () => clearInterval(intervalId);
-    }, [provider, container, turns]);
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
+        const timer = window.setInterval(() => {
+            if (location.href !== lastUrl) check();
+        }, 250);
+        window.addEventListener('popstate', check);
+        return () => {
+            bodyObserver.disconnect();
+            turnObserver?.disconnect();
+            window.clearInterval(timer);
+            window.removeEventListener('popstate', check);
+            cancelAnimationFrame(frame);
+        };
+    }, [provider]);
 
     return { turns, provider, container };
 }

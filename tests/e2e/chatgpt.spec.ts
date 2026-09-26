@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 
@@ -102,7 +103,6 @@ test('F11: first run opens outline directly and only the toggle shortcut is hand
 });
 
 test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]', async ({ extensionContext, extensionPage }) => {
-  test.fail(process.env.SCROLL_E2E_STRICT !== '1', 'P4: production provider does not parse current data-turn-key/content units');
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
   const blocks = sidebar.locator('[data-block-key]');
@@ -125,4 +125,143 @@ test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]'
     const scroller = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
     return target.top >= scroller.top && target.top < scroller.bottom;
   })).toBe(true);
+});
+
+test('F06 text-node streaming updates the current outline [P4]', async ({ extensionContext, extensionPage }) => {
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toBeVisible();
+  await extensionPage.evaluate(() => {
+    const heading = document.querySelector<HTMLElement>('[data-markdown-text-style] h2')!;
+    heading.firstChild!.textContent = 'Orbit Updated';
+  });
+  await expect(sidebar.getByRole('button', { name: 'Orbit Updated' })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toHaveCount(0);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+});
+
+test('F02 overlapping legacy wrapper does not duplicate a current turn [P4 synthetic wrapper]', async ({ extensionContext, extensionPage }) => {
+  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  await extensionPage.evaluate(() => {
+    const turn = document.querySelector<HTMLElement>('[data-turn-key]')!;
+    const wrapper = document.createElement('section');
+    wrapper.setAttribute('data-turn', 'assistant');
+    turn.replaceWith(wrapper);
+    wrapper.appendChild(turn);
+  });
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+});
+
+test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ extensionContext, extensionPage }) => {
+  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await extensionPage.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('.thread-scroll-container')!;
+    sessionStorage.setItem('saved-chat', scroller.outerHTML);
+    history.pushState({}, '', '/c/fixture-other');
+    scroller.replaceWith(scroller.cloneNode(false));
+  });
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+  await extensionPage.evaluate(() => {
+    const holder = document.createElement('div');
+    holder.innerHTML = sessionStorage.getItem('saved-chat')!;
+    const replacement = holder.firstElementChild!;
+    replacement.querySelector<HTMLElement>('[data-user-message-bubble] .whitespace-pre-wrap')!.textContent = '';
+    document.querySelector('.thread-scroll-container')!.replaceWith(replacement);
+  });
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await expect(sidebar.locator('.scroll-pro-item-title').first()).toHaveText('Prompt');
+  await expect(sidebar).not.toContainText(expected.prompts[0]);
+  await extensionPage.evaluate(() => {
+    history.back();
+    const holder = document.createElement('div');
+    holder.innerHTML = sessionStorage.getItem('saved-chat')!;
+    document.querySelector('.thread-scroll-container')!.replaceWith(holder.firstElementChild!);
+  });
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+  await extensionPage.evaluate(() => history.replaceState({}, '', '/'));
+  await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toHaveCount(0);
+  await extensionPage.evaluate(() => history.replaceState({}, '', '/c/fixture-current-turn-unit'));
+  await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
+});
+
+test('F13 assistant-only output omits a fabricated user [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
+  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
+  await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
+  const sidebar = await openOutline(extensionPage);
+  const blocks = sidebar.locator('[data-block-key]');
+  await expect(blocks).toHaveCount(2);
+  await sidebar.getByRole('button', { name: 'Prompts' }).click();
+  await expect(blocks.locator('.scroll-pro-item-title').first()).toHaveText('Orbit Alpha');
+  await blocks.first().click({ button: 'right' });
+  await expect(extensionPage.getByRole('button', { name: 'Copy prompt' })).toBeDisabled();
+  await expect(extensionPage.getByRole('button', { name: 'Copy Q&A' })).toBeDisabled();
+  await expect(extensionPage.getByRole('button', { name: 'Copy response' })).toBeEnabled();
+  await extensionPage.getByRole('button', { name: 'Copy response' }).click();
+  const plainCopy = await extensionPage.evaluate(() => navigator.clipboard.readText());
+  expect(plainCopy).toContain('Orbit Alpha');
+  expect(plainCopy).not.toContain('## Orbit Alpha');
+
+  const exportButton = sidebar.locator('[data-action="export-format"]');
+  await exportButton.click({ button: 'right' });
+  await extensionPage.getByRole('button', { name: 'JSON' }).click();
+  const downloadPromise = extensionPage.waitForEvent('download');
+  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
+  const download = await downloadPromise;
+  const data = JSON.parse(await readFile(await download.path(), 'utf8')) as { turns: Array<{ prompt: string | null; response: string; kind: string; title: string }> };
+  expect(data.turns).toHaveLength(2);
+  expect(data.turns[0]).toMatchObject({ prompt: null, kind: 'assistant', title: 'Orbit Alpha' });
+  expect(data.turns[0].response).toContain('## Orbit Alpha');
+
+  await exportButton.click({ button: 'right' });
+  const markdownPromise = extensionPage.waitForEvent('download');
+  await extensionPage.getByRole('button', { name: 'Markdown' }).click();
+  const markdown = await readFile(await (await markdownPromise).path(), 'utf8');
+  expect(markdown).toContain('**Assistant**');
+  expect(markdown).toContain('## Orbit Alpha');
+  expect(markdown).not.toContain('**User**');
+});
+
+test('F13 assistant-only TXT export has no user section [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
+  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
+  const sidebar = await openOutline(extensionPage);
+  const exportButton = sidebar.locator('[data-action="export-format"]');
+  await exportButton.click({ button: 'right' });
+  await extensionPage.getByRole('button', { name: /^Text/ }).click();
+  const textPromise = extensionPage.waitForEvent('download');
+  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
+  const plainText = await readFile(await (await textPromise).path(), 'utf8');
+  expect(plainText).toContain('Assistant:');
+  expect(plainText).not.toContain('User:');
+});
+
+test('F13 assistant-only PDF print content has no user section [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
+  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
+  const sidebar = await openOutline(extensionPage);
+  await extensionPage.evaluate(() => {
+    const observer = new MutationObserver((records) => {
+      const frame = records.flatMap(record => Array.from(record.addedNodes)).find(node => node instanceof HTMLIFrameElement) as HTMLIFrameElement | undefined;
+      if (!frame) return;
+      (window as Window & { capturedPdfHtml?: string }).capturedPdfHtml = frame.contentDocument?.documentElement.outerHTML;
+      observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true });
+  });
+  const exportButton = sidebar.locator('[data-action="export-format"]');
+  await exportButton.click({ button: 'right' });
+  await extensionPage.getByRole('button', { name: 'PDF' }).click();
+  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
+  const pdfHtml = await extensionPage.waitForFunction(() => (window as Window & { capturedPdfHtml?: string }).capturedPdfHtml || '').then(handle => handle.jsonValue());
+  expect(pdfHtml).toContain('Orbit Alpha');
+  expect(pdfHtml).not.toContain('class="section-label">You');
 });

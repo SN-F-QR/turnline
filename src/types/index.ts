@@ -12,6 +12,9 @@ export interface Turn {
     element: HTMLElement;
     text: string;
     headings: Heading[];
+    contentElement?: HTMLElement;
+    contextLabel?: string;
+    timeLabel?: string;
 }
 
 export interface Provider {

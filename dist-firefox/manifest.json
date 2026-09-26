@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/main.tsx-CWdOWhbZ.js"
+        "assets/main.tsx-CABjjAM7.js"
       ],
       "matches": [
         "https://chatgpt.com/*",
@@ -49,7 +49,7 @@
         "https://www.chatgpt.com/*"
       ],
       "resources": [
-        "assets/main.tsx-CWdOWhbZ.js"
+        "assets/main.tsx-CABjjAM7.js"
       ],
       "use_dynamic_url": false
     }

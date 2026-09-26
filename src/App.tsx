@@ -55,9 +55,16 @@ const App = () => {
     observer.observe(document, { subtree: true, childList: true });
 
     window.addEventListener('popstate', updateChatPageStatus);
+    const timer = window.setInterval(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        updateChatPageStatus();
+      }
+    }, 250);
     return () => {
       observer.disconnect();
       window.removeEventListener('popstate', updateChatPageStatus);
+      window.clearInterval(timer);
     };
   }, [isProviderSupported, updateChatPageStatus]);
 
