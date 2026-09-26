@@ -2,7 +2,7 @@
 
 **Navigate, copy, and export your AI conversations.**
 
-A browser extension that adds a navigation sidebar to ChatGPT, Claude, and Gemini. Jump to any turn, copy prompts and responses, and export full conversations.
+A browser extension that adds a navigation sidebar to ChatGPT, Claude, and Gemini. Jump to any turn, copy prompts and responses, and export discovered conversation content.
 
 <p align="center">
   <img src="assets/demo.png" alt="Scroll sidebar" width="800">
@@ -35,9 +35,15 @@ Load `dist-firefox/` as a temporary add-on (`about:debugging` > This Firefox > L
 
 **Navigate** — A floating table of contents for every conversation. Click any prompt to jump to it instantly. Headings inside long responses are detected for section-level navigation.
 
-**Copy** — Copy individual prompts, responses, Q&A pairs, or the full chat. Toggle markdown mode for formatted output.
+**Copy** — Copy individual prompts, responses, Q&A pairs, or all discovered messages. Toggle markdown mode for formatted output.
 
-**Export** — Export conversations to Markdown, PDF, plain text, or JSON.
+**Export** — Export conversations to Markdown, PDF, plain text, or JSON. Copy and export share the same captured messages, including independent assistant replies and headings hidden by your depth setting.
+
+**Reading position** — Prompts and All track the message or heading you are reading without moving keyboard focus. A heading hidden by the depth setting falls back to its visible parent or message. Repeated clicks replace the previous navigation; a wheel, touch, or key interaction interrupts it. Reduced-motion preferences are respected.
+
+**ChatGPT history** — Opening the outline automatically searches toward older messages and retains discovered messages when ChatGPT replaces its visible DOM. Use **Stop** to cancel or **Scan history** to retry. Scrolling, touching, clicking or typing in the chat immediately takes control back from the scan; it will not pull you back afterward. The scan also visits empty message/heading placeholders and restores your reading position afterward. Clicking an evicted message attempts to load its DOM again; unavailable messages are reported.
+
+After checking the oldest available messages without finding new messages or unresolved content, the outline shows **Scan finished · No more messages found**. Layout changes and text streaming in existing replies do not keep history discovery running. Missing content, a 15-second timeout, cancellation or an error still shows **Incomplete** and its reason. A finished DOM scan does not prove that the server has returned the entire chat: copies and exports describe the discovered range, and JSON separates `scanStatus: "finished"` from `complete: null` (overall completeness unknown). An unfinished scan uses `complete: false`. Cancelling an export stops the download. No background API, account access, or persistent chat archive is used; discovered messages are kept in memory for the current conversation.
 
 **Search** — Filter turns and headings by keyword.
 
@@ -58,6 +64,21 @@ Scroll runs as a content script on ChatGPT, Claude, and Gemini. It watches the D
 No data leaves your browser. No account required. The extension uses the storage permission for local settings.
 
 **Tech stack:** TypeScript, React, Vite, Tailwind CSS v4, Manifest V3.
+
+## Local verification
+
+Use Node 24.13.0 from `.nvmrc` (CI baseline):
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:ci       # Production/test type checks and Node unit tests
+npm run test:e2e      # Build Chrome once, then offline Chromium extension tests
+npm run test:check    # All local checks above
+npm run build:firefox # Clean and rebuild dist-firefox/
+```
+
+The browser tests load the real extension and replay local DOM captures without accessing an account. Synthetic transitions are labeled in the tests. Chromium tests and a Firefox build do not replace live ChatGPT, Claude, Gemini or Firefox smoke checks. Scheduled-message DOM and release-time live-site checks remain separate validation work.
 
 ## Contributing
 

@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Turn } from '../types';
 import type { ExportBlock } from '../types/messages';
-import { scrollToElement } from '../lib/scroll';
+import { findScrollable } from '../lib/scroll';
+import { describeHistory, getHistoryCoverage, type HistoryResult } from '../lib/chatHistory';
+import { toExportBlocks, toJsonTurns } from '../lib/conversationExport';
 import { chatgpt } from '../providers/chatgpt';
 import { claude } from '../providers/claude';
 import { gemini } from '../providers/gemini';
 import { showToast as emitToast, type ToastType } from '../services/toast';
-import { serializeNodeToMarkdown, renderMarkdownToHtml, stripMarkdown } from '../lib/markdownUtil';
+import { renderMarkdownToHtml, stripMarkdown } from '../lib/markdownUtil';
 import { downloadFile } from '../lib/download';
 import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
-import { chatgptMarkdown } from '../providers/chatgptContent';
 import { useOutlineSettings } from '../hooks/useOutlineSettings';
 import { getHeadingLevel, getOutlineWidth } from '../lib/outlineSettings';
 import DOMPurify from 'dompurify';
@@ -178,25 +179,6 @@ const getSidebarOpenDirection = (pos: SidebarPosition, preferredWidth = 420): Si
     return { x: openX, y: openY };
 };
 
-const isScrollable = (el: HTMLElement | null) => {
-    if (!el) return false;
-    const style = window.getComputedStyle(el);
-    const overflowY = style.overflowY || style.overflow;
-    const canScroll = /(auto|scroll|overlay)/.test(overflowY);
-    return canScroll && el.scrollHeight - el.clientHeight > 4;
-};
-
-const findScrollable = (start: HTMLElement | null): HTMLElement | null => {
-    let current: HTMLElement | null = start;
-    while (current) {
-        if (isScrollable(current)) return current;
-        if (current === document.body || current === document.documentElement) break;
-        current = current.parentElement;
-    }
-    const docEl = document.scrollingElement as HTMLElement | null;
-    return docEl || document.documentElement || document.body;
-};
-
 const getLineClamp = () => {
     try {
         const raw = localStorage.getItem(LINE_CLAMP_KEY);
@@ -234,6 +216,10 @@ const copyToClipboard = (text: string) => {
 
 type SidebarProps = {
     turns: Turn[];
+    history: HistoryResult;
+    discoverHistory: () => Promise<HistoryResult>;
+    cancelHistory: () => void;
+    navigateToTurn: (id: string, headingIndex?: number) => Promise<boolean>;
     providerName: string;
     container: HTMLElement | null;
     isOpen: boolean;
@@ -241,7 +227,7 @@ type SidebarProps = {
     onToggle: () => void;
 };
 
-export default function Sidebar({ turns, providerName, container, isOpen, isPaused, onToggle }: SidebarProps) {
+export default function Sidebar({ turns, history, discoverHistory, cancelHistory, navigateToTurn, providerName, container, isOpen, isPaused, onToggle }: SidebarProps) {
     const [viewLevel, setViewLevel] = useState<1 | 2>(2); // 1=Prompts, 2=All
     const { depth, width, updateDepth, updateWidth } = useOutlineSettings();
     const widthRef = useRef(width);
@@ -250,6 +236,9 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const [search, setSearch] = useState('');
     const [progress, setProgress] = useState(0);
     const [lineClamp, setLineClamp] = useState<number>(() => getLineClamp());
+    const [activeKey, setActiveKey] = useState<string | null>(null);
+    const pointerInSidebar = useRef(false);
+    const listRef = useRef<HTMLDivElement | null>(null);
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const [exportFormat, setExportFormat] = useState<'md' | 'pdf' | 'txt' | 'json'>('md');
     const captureInProgressRef = useRef(false);
@@ -290,9 +279,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const suppressClickRef = useRef(false);
     const dragBodyStyleRef = useRef<{ userSelect: string; cursor: string } | null>(null);
     const ignoreNextPositionWriteRef = useRef(false);
-    const hasInitializedFocus = useRef(false);
-    const isHoveringSidebar = useRef(false);
-    const isSmoothPursuit = useRef(false);
 
     const turnsRef = useRef(turns);
     useEffect(() => { turnsRef.current = turns; }, [turns]);
@@ -503,7 +489,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     }, [isOpen, handleTogglePointerMove, handleTogglePointerUp, setDragStyles]);
 
     const preserveSidebarScroll = (callback: () => void) => {
-        const list = document.querySelector('.scroll-pro-sidebar-list') as HTMLElement;
+        const list = listRef.current;
         if (!list) {
             callback();
             return;
@@ -572,10 +558,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
     const getTurnCopyText = useCallback((turn: Turn | undefined) => {
         if (!turn) return '';
-        if (!copyWithMarkdown) return (turn.contentElement?.innerText || stripMarkdown(turn.text) || '').trim();
-        const raw = serializeNodeToMarkdown(turn.contentElement || turn.element);
-        const compact = raw.replace(/\n{3,}/g, '\n\n').trim();
-        return compact || turn.text || '';
+        return copyWithMarkdown ? turn.text : stripMarkdown(turn.text);
     }, [copyWithMarkdown]);
 
     const blocks: Block[] = useMemo(() => buildConversationBlocks(turns), [turns]);
@@ -628,22 +611,17 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         return map;
     }, [focusableItems]);
 
-    const getCurrentExportBlocks = useCallback((): ExportBlock[] => {
-        return blocks.map((block) => {
-            const promptText = block.prompt ? chatgptMarkdown(block.prompt.contentElement || block.prompt.element) || block.prompt.text : undefined;
-            const answerText = block.answer ? chatgptMarkdown(block.answer.contentElement || block.answer.element) || block.answer.text : undefined;
-
-            return {
-                prompt: promptText?.trim(),
-                answer: answerText?.trim(),
-                headings: block.headings.map((h) => h.innerText),
-                kind: block.kind,
-                title: block.title,
-            };
+    const getCurrentExportBlocks = useCallback(() => toExportBlocks(blocks), [blocks]);
+    const coverage = useMemo(() => providerName === 'chatgpt' ? getHistoryCoverage(history, turns.length) : { complete: null, scanStatus: 'not-scanned', description: 'Detected messages' }, [providerName, history, turns.length]);
+    const scopeLabel = coverage.description;
+    const navigate = (turn: Turn | undefined, headingIndex?: number) => {
+        if (turn) void navigateToTurn(turn.id, headingIndex).then(found => {
+            if (!found) showToast('Message is no longer available on this page', 'info');
         });
-    }, [blocks]);
+    };
 
-    const exportChat = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat, exportBlocks?: ExportBlock[]) => {
+    const exportChat = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat, exportBlocks?: ExportBlock[], exportCoverage = coverage) => {
+        const rangeLabel = exportCoverage.description;
         const turns = exportBlocks ?? getCurrentExportBlocks();
         if (!turns.length) {
             showToast('Nothing to export yet');
@@ -654,7 +632,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         if (format === 'md') {
             const lines: string[] = [];
-            lines.push(`# Chat Export (${providerName}) - ${new Date().toLocaleString()}`, '');
+            lines.push(`# Chat Export (${providerName}) - ${new Date().toLocaleString()}`, '', rangeLabel, '');
             turns.forEach((block, idx) => {
                 lines.push(`## Turn ${idx + 1}`, '');
                 if (block.prompt !== undefined) lines.push('**User**', block.prompt || '…', '');
@@ -670,7 +648,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         if (format === 'txt') {
             const lines: string[] = [];
-            lines.push(`CHAT EXPORT (${providerName})`, `Exported: ${new Date().toLocaleString()}`, '', '='.repeat(60), '');
+            lines.push(`CHAT EXPORT (${providerName})`, `Exported: ${new Date().toLocaleString()}`, rangeLabel, '', '='.repeat(60), '');
             turns.forEach((block, idx) => {
                 const promptPlain = stripMarkdown(block.prompt || '');
                 const answerPlain = stripMarkdown(block.answer || '');
@@ -688,16 +666,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         if (format === 'json') {
             const data = {
+                coverage: exportCoverage,
                 exported: new Date().toISOString(),
                 provider: providerName,
                 url: window.location.href,
-                turns: turns.map((block) => ({
-                    prompt: block.prompt ?? null,
-                    response: block.answer || '',
-                    headings: block.headings || [],
-                    kind: block.kind,
-                    title: block.title,
-                })),
+                turns: toJsonTurns(turns),
             };
             downloadFile(JSON.stringify(data, null, 2), 'application/json', filename);
             return;
@@ -738,188 +711,10 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                     )
                     .join('')}
             `;
-            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(chatTitle)} - Export</title>${getPdfStyles()}</head><body>${body}</body></html>`;
+            const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${DOMPurify.sanitize(chatTitle)} - Export</title>${getPdfStyles()}</head><body><p>${DOMPurify.sanitize(rangeLabel)}</p>${body}</body></html>`;
             await printHtmlAsPdf(html);
         }
-    }, [chatTitle, exportFormat, getCurrentExportBlocks, providerName, showToast]);
-
-    const captureChatGPTViaNavigation = useCallback(async (): Promise<ExportBlock[]> => {
-        const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-        const waitForHydration = async (block: Block) => {
-            const start = Date.now();
-            const MAX_WAIT = 2500; // Max wait time per block
-
-            while (Date.now() - start < MAX_WAIT) {
-                const promptEl = block.prompt?.contentElement;
-                const answerEl = block.answer?.contentElement;
-
-                const hasPrompt = !block.prompt || !!(promptEl?.textContent?.trim() || block.prompt.text.trim());
-                const hasAnswer = !block.answer || !!(answerEl?.textContent?.trim() || block.answer.text.trim());
-
-                if (hasPrompt && hasAnswer) {
-                    await sleep(50);
-                    return;
-                }
-
-                await sleep(50); // Poll every 50ms
-            }
-        };
-
-        const prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches ?? false;
-
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            inset: 0;
-            z-index: 2147483646;
-            background: ${prefersLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.15)'};
-            pointer-events: all;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            padding-bottom: 28px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        `;
-
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes scroll-pro-pill-in {
-                from { opacity: 0; transform: translateY(8px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            .scroll-pro-capture-stop {
-                background: none;
-                border: none;
-                color: ${prefersLight ? '#7b808b' : '#6f7381'};
-                font-size: 12px;
-                font-weight: 500;
-                cursor: pointer;
-                padding: 0 2px;
-                letter-spacing: 0.01em;
-                transition: color 0.15s;
-            }
-            .scroll-pro-capture-stop:hover {
-                color: ${prefersLight ? '#15171c' : '#f5f5f7'};
-            }
-        `;
-        overlay.appendChild(style);
-
-        const pill = document.createElement('div');
-        pill.style.cssText = `
-            background: ${prefersLight ? '#f8f7f4' : '#050608'};
-            border: 1px solid ${prefersLight ? '#d9d6cf' : '#262732'};
-            border-radius: 10px;
-            box-shadow: ${prefersLight ? '0 12px 28px rgba(20, 18, 12, 0.12)' : '0 16px 36px rgba(0, 0, 0, 0.45)'};
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 14px;
-            position: relative;
-            overflow: hidden;
-            animation: scroll-pro-pill-in 0.2s ease-out;
-        `;
-
-        const mainText = document.createElement('span');
-        mainText.style.cssText = `
-            font-size: 13px;
-            font-weight: 500;
-            color: ${prefersLight ? '#15171c' : '#f5f5f7'};
-            letter-spacing: 0.01em;
-        `;
-        mainText.textContent = 'Preparing...';
-
-        const subText = document.createElement('span');
-        subText.style.cssText = `
-            font-size: 12px;
-            color: ${prefersLight ? '#7b808b' : '#6f7381'};
-        `;
-        subText.textContent = '';
-
-        const abortBtn = document.createElement('button');
-        abortBtn.className = 'scroll-pro-capture-stop';
-        abortBtn.textContent = 'Stop';
-
-        const abortState = { aborted: false };
-        abortBtn.onclick = (e) => {
-            e.stopPropagation();
-            abortState.aborted = true;
-        };
-
-        const progressBar = document.createElement('div');
-        progressBar.style.cssText = `
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            height: 2px;
-            width: 0%;
-            background: ${prefersLight ? '#4b4f59' : '#b0b3c0'};
-            border-radius: 0 1px 0 0;
-            transition: width 0.3s ease;
-        `;
-
-        pill.appendChild(mainText);
-        pill.appendChild(subText);
-        pill.appendChild(abortBtn);
-        pill.appendChild(progressBar);
-        overlay.appendChild(pill);
-        document.body.appendChild(overlay);
-
-        try {
-            const exportBlocks: ExportBlock[] = [];
-            const totalBlocks = blocks.length;
-            const startTime = Date.now();
-
-            for (let i = 0; i < totalBlocks; i++) {
-                if (abortState.aborted) {
-                    showToast('Capture stopped');
-                    break; // Exit loop, return what we have
-                }
-
-                const block = blocks[i];
-
-                const elapsed = Date.now() - startTime;
-                const avgTimePerBlock = i > 0 ? elapsed / i : 1000; // Default 1s for first block
-                const remainingBlocks = totalBlocks - i;
-                const estimatedRemainingMs = remainingBlocks * avgTimePerBlock;
-                const estimatedSeconds = Math.ceil(estimatedRemainingMs / 1000);
-
-                mainText.textContent = `Capturing ${i + 1} of ${totalBlocks}`;
-                subText.textContent = `~${estimatedSeconds}s`;
-                progressBar.style.width = `${Math.round(((i + 1) / totalBlocks) * 100)}%`;
-
-                const targetElement = block.prompt?.element || block.answer?.element;
-                if (targetElement) {
-                    scrollToElement(targetElement);
-                    await waitForHydration(block);
-                }
-
-                // Use specific selectors to avoid capturing role headers
-                const promptEl = block.prompt?.contentElement;
-                const promptText = block.prompt?.text || '';
-
-                const answerEl = block.answer?.contentElement;
-                const answerText = block.answer?.text || '';
-
-                const headings = block.headings?.map(h => h.innerText?.trim() || '').filter(Boolean) || [];
-
-                const promptMarkdown = promptEl ? chatgptMarkdown(promptEl) : promptText;
-                const answerMarkdown = answerEl ? chatgptMarkdown(answerEl) : answerText;
-
-                exportBlocks.push({
-                    prompt: block.prompt ? promptMarkdown || promptText : undefined,
-                    answer: block.answer ? answerMarkdown || answerText : undefined,
-                    headings,
-                    kind: block.kind,
-                    title: block.title,
-                });
-            }
-
-            return exportBlocks;
-        } finally {
-            overlay.remove();
-        }
-    }, [blocks, showToast]);
+    }, [chatTitle, exportFormat, getCurrentExportBlocks, providerName, showToast, coverage]);
 
     const startExport = useCallback(async (format: 'md' | 'pdf' | 'txt' | 'json' = exportFormat, consentJustGranted = false) => {
         if (captureInProgressRef.current) return;
@@ -932,9 +727,14 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
             captureInProgressRef.current = true;
             try {
-                const exportBlocks = await captureChatGPTViaNavigation();
-                await exportChat(format, exportBlocks);
-                showToast('Chat exported');
+                const result = await discoverHistory();
+                if (result.status === 'cancelled' || result.status === 'failed') {
+                    showToast(result.reason, 'info');
+                    return;
+                }
+                const exportBlocks = toExportBlocks(buildConversationBlocks(result.turns));
+                await exportChat(format, exportBlocks, getHistoryCoverage(result, result.turns.length));
+                showToast('Discovered range exported');
                 maybeShowContextHint();
             } catch (err) {
                 showToast('Export failed');
@@ -946,7 +746,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         await exportChat(format);
         maybeShowContextHint();
-    }, [captureChatGPTViaNavigation, exportChat, exportFormat, hasCaptureConsent, providerName, showToast, maybeShowContextHint]);
+    }, [discoverHistory, exportChat, exportFormat, hasCaptureConsent, providerName, showToast, maybeShowContextHint]);
 
     const handleConsentAccept = useCallback(() => {
         try {
@@ -962,83 +762,60 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         setShowCaptureConsent(false);
     }, []);
 
-    const findVisibleTurnIndex = useCallback(() => {
-        if (!turns.length) return -1;
-
-        const viewportHeight = window.innerHeight;
-        const headerOffset = 100; // Approximate header height
-
-        for (let i = 0; i < turns.length; i++) {
-            const turn = turns[i];
-            if (!turn.element) continue;
-            const rect = turn.element.getBoundingClientRect();
-
-            if ((rect.top >= headerOffset && rect.top < viewportHeight) ||
-                (rect.top < headerOffset && rect.bottom > headerOffset)) {
-                return i;
-            }
-        }
-        return 0; // Default to first if none found
-    }, [turns]);
-
+    // Reading activity never moves keyboard focus or scrolls the chat.
     useEffect(() => {
-        if (!container || !isOpen || isPaused) return;
-
-        const scrollEl = findScrollable(container);
-        if (!scrollEl) return;
-
-        let ticking = false;
-
-        const handleScroll = () => {
-            if (!ticking) {
-                window.requestAnimationFrame(() => {
-                    if (!isHoveringSidebar.current) {
-                        const visibleTurnIndex = findVisibleTurnIndex();
-                        if (visibleTurnIndex >= 0) {
-                            const turn = turns[visibleTurnIndex];
-                            const itemIndex = focusableItems.findIndex(item =>
-                                item.kind === 'block' && (item.block.prompt?.id === turn.id || item.block.answer?.id === turn.id)
-                            );
-
-                            if (itemIndex >= 0 && itemIndex !== focusedIndex) {
-                                isSmoothPursuit.current = true;
-                                setFocusedIndex(itemIndex);
+        if (!isOpen || isPaused || history.status === 'scanning') return;
+        let frame = 0;
+        const update = () => {
+            frame = 0;
+            const scroller = findScrollable(container);
+            const viewport = scroller === document.scrollingElement ? { top: 0, bottom: innerHeight } : scroller.getBoundingClientRect();
+            const line = Math.max(0, viewport.top) + 25;
+            const live = turns.filter(turn => turn.element.isConnected && turn.element.getClientRects().length);
+            const turn = live.find(item => {
+                const rect = item.element.getBoundingClientRect();
+                return rect.top <= line && rect.bottom > line;
+            }) || live.find(item => {
+                const rect = item.element.getBoundingClientRect();
+                return rect.top >= line && rect.top < Math.min(innerHeight, viewport.bottom);
+            });
+            const block = filteredBlocks.find(item => item.prompt?.id === turn?.id || item.answer?.id === turn?.id);
+            let key = block?.key || null;
+            if (block && turn?.id === block.answer?.id && viewLevel === 2) {
+                let index = -1;
+                block.headings.forEach((heading, i) => {
+                    if (heading.element.isConnected && heading.element.getClientRects().length && heading.element.getBoundingClientRect().top <= line) index = i;
+                });
+                if (index >= 0) {
+                    let level = getHeadingLevel(block.headings[index]);
+                    if (level > depth) {
+                        // Walk ancestors, skipping preceding siblings of the hidden heading.
+                        while (--index >= 0) {
+                            const candidate = getHeadingLevel(block.headings[index]);
+                            if (candidate < level) {
+                                level = candidate;
+                                if (level <= depth) break;
                             }
                         }
                     }
-                    ticking = false;
-                });
-                ticking = true;
+                    if (index >= 0) key = `${block.key}-heading-${index}`;
+                } else if (!block.headings.length) key = `${block.key}-heading-0`;
             }
+            setActiveKey(key);
         };
-
-        scrollEl.addEventListener('scroll', handleScroll, { passive: true });
-        return () => scrollEl.removeEventListener('scroll', handleScroll);
-    }, [container, isOpen, isPaused, turns, focusableItems, focusedIndex, findVisibleTurnIndex]);
-
-    useEffect(() => {
-        if (isOpen && !isPaused && !hasInitializedFocus.current) {
-            hasInitializedFocus.current = true;
-
-            const visibleTurnIndex = findVisibleTurnIndex();
-            if (visibleTurnIndex >= 0) {
-                const turn = turns[visibleTurnIndex];
-                const itemIndex = focusableItems.findIndex(item =>
-                    item.kind === 'block' && (item.block.prompt?.id === turn.id || item.block.answer?.id === turn.id)
-                );
-                if (itemIndex >= 0) {
-                    setFocusedIndex(itemIndex);
-                } else {
-                    setFocusedIndex(0);
-                }
-            }
-
-        }
-
-        if (!isOpen) {
-            hasInitializedFocus.current = false;
-        }
-    }, [isOpen, isPaused]); // Removed turns and findVisibleTurnIndex to prevent aggressive re-sync
+        const schedule = (event?: Event) => {
+            if (event?.composedPath().includes(sidebarShellRef.current!)) return;
+            if (!frame) frame = requestAnimationFrame(update);
+        };
+        update();
+        window.addEventListener('scroll', schedule, true);
+        window.addEventListener('resize', schedule);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener('scroll', schedule, true);
+            window.removeEventListener('resize', schedule);
+        };
+    }, [container, isOpen, isPaused, turns, filteredBlocks, viewLevel, depth, history.status]);
 
     const previousFocusItems = useRef(focusableItems);
     useEffect(() => {
@@ -1093,36 +870,36 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
     useEffect(() => {
         if (!contextMenu) return;
-        const close = () => setContextMenu(null);
+        const close = (event: Event) => { if (history.status !== 'scanning' && !event.composedPath().includes(sidebarShellRef.current!)) setContextMenu(null); };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
         };
-    }, [contextMenu]);
+    }, [contextMenu, history.status]);
 
     useEffect(() => {
         if (!exportFormatMenu) return;
-        const close = () => setExportFormatMenu(null);
+        const close = (event: Event) => { if (history.status !== 'scanning' && !event.composedPath().includes(sidebarShellRef.current!)) setExportFormatMenu(null); };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
         };
-    }, [exportFormatMenu]);
+    }, [exportFormatMenu, history.status]);
 
     useEffect(() => {
         if (!copyFormatMenu) return;
-        const close = () => setCopyFormatMenu(null);
+        const close = (event: Event) => { if (history.status !== 'scanning' && !event.composedPath().includes(sidebarShellRef.current!)) setCopyFormatMenu(null); };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
         };
-    }, [copyFormatMenu]);
+    }, [copyFormatMenu, history.status]);
 
     useEffect(() => {
         const scrollEl = findScrollable(container || null);
@@ -1130,7 +907,8 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         const computeProgress = () => {
             const scrolled = scrollEl.scrollTop;
             const max = Math.max(scrollEl.scrollHeight - scrollEl.clientHeight, 0);
-            const pct = max > 0 ? Math.round((scrolled / max) * 100) : 0;
+            const reverse = getComputedStyle(scrollEl).flexDirection === 'column-reverse';
+            const pct = max > 0 ? Math.round(((reverse ? max + scrolled : scrolled) / max) * 100) : 0;
             setProgress(pct);
         };
         computeProgress();
@@ -1150,21 +928,26 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         return () => window.removeEventListener('scroll-pro-export-chat', handleExportEvent as EventListener);
     }, [providerName, startExport]);
 
-    const handleCopyFullChat = useCallback(() => {
-        const lines: string[] = [];
-        blocks.forEach((block) => {
-            if (block.prompt) lines.push(`User: ${getTurnCopyText(block.prompt)}`, '');
-            if (block.answer) {
-                const answerText = getTurnCopyText(block.answer);
-                lines.push(`Assistant: ${answerText}`, '');
-            }
-            lines.push('---', '');
-        });
-        const fullText = lines.join('\n');
-        copyToClipboard(fullText);
-        showToast(copyWithMarkdown ? 'Full chat copied (markdown)' : 'Full chat copied');
+    const copyChat = useCallback((format: 'text' | 'md' | 'json') => {
+        const exportBlocks = getCurrentExportBlocks();
+        if (format === 'json') {
+            copyToClipboard(JSON.stringify({ provider: providerName, url: location.href,
+                coverage,
+                turns: toJsonTurns(exportBlocks),
+            }, null, 2));
+        } else {
+            const lines = [scopeLabel, ''];
+            exportBlocks.forEach(block => {
+                if (block.prompt !== undefined) lines.push(format === 'md' ? `**User:** ${block.prompt}` : `User: ${stripMarkdown(block.prompt)}`, '');
+                if (block.answer !== undefined) lines.push(format === 'md' ? `**Assistant:** ${block.answer}` : `Assistant: ${stripMarkdown(block.answer)}`, '');
+                lines.push('---', '');
+            });
+            copyToClipboard(lines.join('\n'));
+        }
+        showToast('Discovered range copied');
         maybeShowContextHint();
-    }, [blocks, copyWithMarkdown, getTurnCopyText, showToast, maybeShowContextHint]);
+    }, [getCurrentExportBlocks, providerName, scopeLabel, coverage, showToast, maybeShowContextHint]);
+    const handleCopyFullChat = () => copyChat(copyWithMarkdown ? 'md' : 'text');
 
     // Capture-phase contextmenu handler (beats host page interception)
     const filteredBlocksRef = useRef(filteredBlocks);
@@ -1227,24 +1010,15 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     }, [isOpen, isPaused]);
 
     useEffect(() => {
-        if (focusedIndex < 0) return;
-        const item = focusableItems[focusedIndex];
-        if (!item) return;
-        const el = itemRefs.current.get(item.key);
-        if (el) {
-            const behavior = isSmoothPursuit.current ? 'smooth' : 'auto';
-
-            const block = isSmoothPursuit.current ? 'center' : 'nearest';
-
-            el.scrollIntoView({ behavior, block });
-
-            if (isSmoothPursuit.current) {
-                setTimeout(() => {
-                    isSmoothPursuit.current = false;
-                }, 500); // Longer timeout for smooth scroll to finish
-            }
-        }
-    }, [focusedIndex, focusableItems]);
+        const list = listRef.current;
+        const item = activeKey ? itemRefs.current.get(activeKey) : undefined;
+        if (!list || !item || pointerInSidebar.current) return;
+        const viewport = list.getBoundingClientRect();
+        // Blocks contain their headings; use only the main title's rectangle.
+        const rect = (item.querySelector('.scroll-pro-item-title') || item).getBoundingClientRect();
+        if (rect.top < viewport.top) list.scrollTop += rect.top - viewport.top;
+        else if (rect.bottom > viewport.bottom) list.scrollTop += rect.bottom - viewport.bottom;
+    }, [activeKey]);
 
     const renderContextMenu = () => {
         if (!contextMenu) return null;
@@ -1332,7 +1106,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
             startExport(format);
             if (providerName === 'chatgpt') {
-                showToast('Preparing full export...');
+                showToast('Preparing discovered range...');
             } else {
                 showToast(`Exported as ${format.toUpperCase()}`);
             }
@@ -1391,61 +1165,9 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
         type CopyOption = { value: string; label: string; action: () => void };
         const options: CopyOption[] = [
-            {
-                value: 'text',
-                label: 'Plain text',
-                action: () => {
-                    const lines: string[] = [];
-                    blocks.forEach((block) => {
-                        if (block.prompt) lines.push(`User: ${block.prompt.contentElement?.innerText || stripMarkdown(block.prompt.text)}`, '');
-                        if (block.answer) {
-                            const answerText = block.answer.contentElement?.innerText || stripMarkdown(block.answer.text);
-                            lines.push(`Assistant: ${answerText}`, '');
-                        }
-                        lines.push('---', '');
-                    });
-                    copyToClipboard(lines.join('\n'));
-                    showToast('Full chat copied (plain text)');
-                },
-            },
-            {
-                value: 'md',
-                label: 'Markdown',
-                action: () => {
-                    const lines: string[] = [];
-                    blocks.forEach((block) => {
-                        if (block.prompt) {
-                            const promptText = chatgptMarkdown(block.prompt.contentElement || block.prompt.element) || block.prompt.text;
-                            lines.push(`**User:** ${promptText}`, '');
-                        }
-                        if (block.answer) {
-                            const answerText = chatgptMarkdown(block.answer.contentElement || block.answer.element) || block.answer.text;
-                            lines.push(`**Assistant:** ${answerText}`, '');
-                        }
-                        lines.push('---', '');
-                    });
-                    copyToClipboard(lines.join('\n'));
-                    showToast('Full chat copied (markdown)');
-                },
-            },
-            {
-                value: 'json',
-                label: 'JSON',
-                action: () => {
-                    const data = {
-                        provider: providerName,
-                        url: window.location.href,
-                        turns: blocks.map((block) => ({
-                            prompt: block.prompt?.text ?? null,
-                            response: block.answer?.text || '',
-                            kind: block.kind,
-                            title: block.title,
-                        })),
-                    };
-                    copyToClipboard(JSON.stringify(data, null, 2));
-                    showToast('Full chat copied (JSON)');
-                },
-            },
+            { value: 'text', label: 'Plain text', action: () => copyChat('text') },
+            { value: 'md', label: 'Markdown', action: () => copyChat('md') },
+            { value: 'json', label: 'JSON', action: () => copyChat('json') },
         ];
 
         const menuWidth = 200;
@@ -1534,8 +1256,9 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                     className="scroll-pro-sidebar"
                     role="complementary"
                     aria-label="Scroll Pro outline"
-                    onMouseEnter={() => isHoveringSidebar.current = true}
-                    onMouseLeave={() => isHoveringSidebar.current = false}
+                    onMouseEnter={() => { pointerInSidebar.current = true; }}
+                    onMouseLeave={() => { pointerInSidebar.current = false; }}
+
                 >
                     <div className="scroll-pro-sidebar-head">
                         <div className="scroll-pro-sidebar-row">
@@ -1572,7 +1295,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                         });
                                     }}
                                     className="scroll-pro-action-btn"
-                                    title="Copy full chat - Right-click for format"
+                                    title="Copy discovered chat - Right-click for format"
                                 >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1635,7 +1358,13 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                         </div>
                     </div>
 
-                    <div className="scroll-pro-sidebar-list">
+                    {providerName === 'chatgpt' && <div className="scroll-pro-history-status" role="status">
+                        <span>{describeHistory(history, turns.length)}</span>
+                        {history.status === 'scanning'
+                            ? <button onClick={cancelHistory}>Stop</button>
+                            : <button onClick={() => void discoverHistory()}>Scan history</button>}
+                    </div>}
+                    <div className="scroll-pro-sidebar-list" ref={listRef}>
                         {turns.length === 0 ? (
                             <div className="scroll-pro-empty">
                                 <div className="scroll-pro-empty-card">
@@ -1663,7 +1392,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                     onClick={() => {
                                         if (contextMenu) return;
                                         if (focusIdx >= 0) setFocusedIndex(focusIdx);
-                                        scrollToElement(block.prompt?.element || block.answer?.element);
+                                        navigate(block.prompt || block.answer);
                                     }}
                                     onContextMenu={(e) => {
                                         e.preventDefault();
@@ -1674,7 +1403,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                         const y = Math.min(e.clientY, window.innerHeight - menuHeight);
                                         setContextMenu({ x, y, block });
                                     }}
-                                    className={`scroll-pro-sidebar-item ${focusedIndex === focusIdx ? 'is-focused' : ''}`}
+                                    className={`scroll-pro-sidebar-item ${focusedIndex === focusIdx ? 'is-focused' : ''} ${activeKey === block.key ? 'is-reading' : ''}`}
+                                    aria-current={activeKey === block.key ? 'location' : undefined}
+                                    tabIndex={0}
+                                    onFocus={(e) => { if (e.target === e.currentTarget) setFocusedIndex(focusIdx); }}
+                                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); navigate(block.prompt || block.answer); } }}
                                     aria-selected={focusedIndex === focusIdx}
                                 >
                                     <div className="scroll-pro-item-body">
@@ -1701,11 +1434,13 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                                                         itemRefs.current.delete(headingKey);
                                                                     }
                                                                 }}
-                                                                className={`scroll-pro-subheading ${focusedIndex === headingFocusIndex ? 'is-focused' : ''}`}
+                                                                className={`scroll-pro-subheading ${focusedIndex === headingFocusIndex ? 'is-focused' : ''} ${activeKey === headingKey ? 'is-reading' : ''}`}
+                                                                aria-current={activeKey === headingKey ? 'location' : undefined}
+                                                                onFocus={() => setFocusedIndex(headingFocusIndex)}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (headingFocusIndex >= 0) setFocusedIndex(headingFocusIndex);
-                                                                    scrollToElement(h.element);
+                                                                    navigate(block.answer, i);
                                                                 }}
                                                             >
                                                                 {h.innerText}
@@ -1724,12 +1459,13 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                                                     itemRefs.current.delete(headingKey);
                                                                 }
                                                             }}
-                                                            className={`scroll-pro-subheading ${focusedIndex === focusIndexByKey.get(`${block.key}-heading-0`) ? 'is-focused' : ''}`}
+                                                            className={`scroll-pro-subheading ${focusedIndex === focusIndexByKey.get(`${block.key}-heading-0`) ? 'is-focused' : ''} ${activeKey === `${block.key}-heading-0` ? 'is-reading' : ''}`}
+                                                            aria-current={activeKey === `${block.key}-heading-0` ? 'location' : undefined}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const headingFocusIndex = focusIndexByKey.get(`${block.key}-heading-0`) ?? -1;
                                                                 if (headingFocusIndex >= 0) setFocusedIndex(headingFocusIndex);
-                                                                scrollToElement(block.answer!.element);
+                                                                navigate(block.answer);
                                                             }}
                                                         >
                                                             {snippet(block.answer.text, 80)}
@@ -1801,12 +1537,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 <div className="scroll-pro-modal-backdrop">
                     <div className="scroll-pro-modal" role="dialog" aria-modal="true" aria-labelledby="scroll-pro-capture-title">
                         <div className="scroll-pro-modal-header">
-                            <span className="scroll-pro-modal-badge">Full export</span>
-                            <h3 id="scroll-pro-capture-title">Load the whole chat</h3>
-                            <p className="scroll-pro-modal-sub">ChatGPT hides replies until you scroll. We will scroll this page from top to bottom to capture everything.</p>
+                            <span className="scroll-pro-modal-badge">Discover history</span>
+                            <h3 id="scroll-pro-capture-title">Load more of this chat</h3>
+                            <p className="scroll-pro-modal-sub">Scroll will search for older messages and load hidden content, then restore your reading position. You can stop the scan. Exports include the discovered range and indicate when completeness is unverified.</p>
                         </div>
                         <ul className="scroll-pro-modal-list">
-                            <li>Scrolls this page top to bottom</li>
+                            <li>Searches toward older messages</li>
                             <li>Waits for content to load as we scroll</li>
                             <li>Runs only while you keep this page open</li>
                         </ul>

@@ -6,18 +6,32 @@ import { loadScenario } from '../helpers/scenario';
 
 const headingSelector = '[data-markdown-text-style] h1, [data-markdown-text-style] h2, [data-markdown-text-style] h3, [data-markdown-text-style] h4, [data-markdown-text-style] h5, [data-markdown-text-style] h6';
 
-async function installOlderLoadOnScroll(page: Page) {
+async function installOlderLoadOnScroll(page: Page, restoreNewer = false) {
   const html = await readFile(resolve(process.cwd(), 'tests/fixtures/chatgpt/long-response-l01/loaded.html'), 'utf8');
-  await page.evaluate((loadedHtml) => {
+  await page.evaluate(({ loadedHtml, restoreNewer }) => {
     const scroller = document.querySelector<HTMLElement>('.thread-scroll-container')!;
+    const cold = scroller.cloneNode(true) as HTMLElement;
     const loaded = new DOMParser().parseFromString(loadedHtml, 'text/html').querySelector<HTMLElement>('.thread-scroll-container')!;
     let replaced = false;
     scroller.addEventListener('scroll', () => {
       if (replaced || scroller.scrollTop >= -100) return;
       replaced = true;
-      scroller.replaceWith(document.importNode(loaded, true));
+      const replacement = document.importNode(loaded, true);
+      scroller.replaceWith(replacement);
+      if (restoreNewer) {
+        // Synthetic reverse transition using the real cold snapshot: the host
+        // remounts the newer DOM window when restoring the original position.
+        let previousTop = 0;
+        replacement.addEventListener('scroll', () => {
+          if (replacement.scrollTop > previousTop && replacement.scrollTop >= -100) replacement.replaceWith(cold);
+          previousTop = replacement.scrollTop;
+        });
+        cold.addEventListener('scroll', () => {
+          if (cold.scrollTop < -100) cold.replaceWith(replacement);
+        });
+      }
     });
-  }, html);
+  }, { loadedHtml: html, restoreNewer });
 }
 
 test('L01 real long-response DOM: cold and upward-loaded snapshots replay', async ({ extensionContext, extensionPage }) => {
@@ -56,11 +70,12 @@ test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', 
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(5);
+  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
   await installOlderLoadOnScroll(extensionPage);
   await extensionPage.locator('.thread-scroll-container').hover();
   await extensionPage.mouse.wheel(0, -2000);
   await expect(extensionPage.locator('[data-turn-key]').first()).toHaveAttribute('data-turn-key', expected.loaded.turnKeys[0]);
-  await expect(sidebar.locator('[data-block-key]')).toHaveCount(5);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(6);
   await expect(sidebar.locator('.scroll-pro-item-title').first()).toContainText(expected.loaded.newPrompt!);
   await sidebar.locator('[data-block-key]').nth(1).locator('.scroll-pro-item-title').click();
   await expect(sidebar.locator('[data-block-key]').nth(1)).toHaveAttribute('aria-selected', 'true');
@@ -99,13 +114,39 @@ test('F09 positive scroll layout keeps the target in its nested viewport [P4]', 
 });
 
 test('F15 L01 outline discovers older turns without manual chat scrolling [P7]', async ({ extensionContext, extensionPage }) => {
-  test.fail(process.env.SCROLL_E2E_STRICT !== '1', 'P7: outline does not discover turn DOM that ChatGPT has not loaded');
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
-  await installOlderLoadOnScroll(extensionPage);
+  const anchor = await extensionPage.locator('[data-content-search-unit-key$=":assistant"]').first().evaluate(el => ({ key: el.getAttribute('data-content-search-unit-key'), top: el.getBoundingClientRect().top }));
+  const newestTail = (await extensionPage.locator('[data-markdown-text-style]').last().innerText()).slice(-40);
+  await installOlderLoadOnScroll(extensionPage, true);
   await expect(extensionPage.locator('#scroll-pro-root')).toBeAttached();
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
   await expect(sidebar).toBeVisible();
-  await expect(extensionPage.locator('[data-turn-key]').first()).toHaveAttribute('data-turn-key', expected.loaded.turnKeys[0]);
   await expect(sidebar).toContainText(expected.loaded.newPrompt!);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(6);
+  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await expect.poll(() => extensionPage.locator('[data-content-search-unit-key]').evaluateAll((nodes, anchor) => {
+    const node = nodes.find(el => el.getAttribute('data-content-search-unit-key') === anchor.key)!;
+    return Math.abs(node.getBoundingClientRect().top - anchor.top);
+  }, anchor)).toBeLessThan(2);
+  await sidebar.getByPlaceholder('Filter…').fill(expected.loaded.newPrompt!);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+  await sidebar.locator('.scroll-pro-item-title').click();
+  await expect.poll(() => extensionPage.locator('[data-user-message-bubble]').first().evaluate(node => {
+    const viewport = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
+    return node.getBoundingClientRect().top >= viewport.top && node.getBoundingClientRect().top < viewport.bottom;
+  })).toBe(true);
+  await sidebar.getByPlaceholder('Filter…').clear();
+  await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
+  await extensionPage.getByRole('button', { name: /^JSON/ }).click();
+  const download = extensionPage.waitForEvent('download');
+  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
+  const data = JSON.parse(await readFile(await (await download).path(), 'utf8'));
+  expect(data.turns).toHaveLength(6);
+  expect(data.turns[0].prompt).toBe(expected.loaded.newPrompt);
+  expect(data.turns.some((turn: { response: string }) => turn.response.includes(expected.cold.lastHeading!))).toBe(true);
+  expect(data.turns.at(-1).response).toContain(newestTail);
+  expect(data.coverage.complete).toBeNull();
+  expect(data.coverage.scanStatus).toBe('finished');
+  await extensionPage.screenshot({ path: test.info().outputPath('p7-outline.png') });
 });

@@ -24,8 +24,8 @@ function checkIsChatPage(providerName: string): boolean {
 }
 
 const App = () => {
-  const { turns, provider, container } = useChatTurns();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { turns, provider, container, history, discoverHistory, cancelHistory, navigateToTurn } = useChatTurns(isSidebarOpen);
   const isProviderSupported = !!provider && ['chatgpt', 'claude', 'gemini'].includes(provider.name);
 
   // Track whether we're on a chat page (reactive to SPA navigation)
@@ -83,6 +83,10 @@ const App = () => {
         <ErrorBoundary>
           <Sidebar
             turns={turns}
+            history={history}
+            discoverHistory={discoverHistory}
+            cancelHistory={cancelHistory}
+            navigateToTurn={navigateToTurn}
             providerName={provider?.name || 'unknown'}
             container={container}
             isOpen={isSidebarOpen}

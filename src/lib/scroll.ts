@@ -42,14 +42,27 @@ const computeTargetPosition = (
   return Math.min(reversed ? 0 : range, Math.max(reversed ? -range : 0, rawTarget - SCROLL_OFFSET));
 };
 
-const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: number) => {
+let cancelActiveScroll: (() => void) | undefined;
+export const cancelScroll = () => { cancelActiveScroll?.(); };
+
+export const findScrollable = (start: HTMLElement | null): HTMLElement => {
+  let node = start;
+  while (node) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(node).overflowY)) return node;
+    node = node.parentElement;
+  }
+  return (document.scrollingElement || document.documentElement) as HTMLElement;
+};
+
+const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: number, node: HTMLElement) => {
+  cancelScroll();
   const containerIsWindow = scrollContainer === window;
   const getScroll = () => (containerIsWindow ? window.scrollY : (scrollContainer as HTMLElement).scrollTop);
   const setScroll = (value: number) => {
     if (containerIsWindow) {
-      window.scrollTo({ top: value });
+      window.scrollTo({ top: value, behavior: 'instant' });
     } else {
-      (scrollContainer as HTMLElement).scrollTop = value;
+      (scrollContainer as HTMLElement).scrollTo({ top: value, behavior: 'instant' });
     }
   };
 
@@ -67,16 +80,20 @@ const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: num
 
   const cancelEvents: (keyof DocumentEventMap)[] = ['wheel', 'touchstart', 'mousedown', 'keydown'];
   let canceled = false;
+  let frame = 0;
 
   const cancel = () => {
     canceled = true;
+    cancelAnimationFrame(frame);
     cleanup();
   };
 
   const cleanup = () => {
+    if (cancelActiveScroll === cancel) cancelActiveScroll = undefined;
     cancelEvents.forEach((event) => window.removeEventListener(event, cancel, true));
   };
 
+  cancelActiveScroll = cancel;
   cancelEvents.forEach((event) => window.addEventListener(event, cancel, { passive: true, capture: true }));
 
   const startTime = performance.now();
@@ -84,22 +101,24 @@ const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: num
 
   const step = () => {
     if (canceled) return;
+    if (!node.isConnected) { cancel(); return; }
     const now = performance.now();
     const elapsed = now - startTime;
     const t = Math.min(1, elapsed / SCROLL_DURATION);
     const eased = easeOutCubic(t);
-    setScroll(start + distance * eased);
+    const currentTarget = computeTargetPosition(node, scrollContainer, containerIsWindow);
+    setScroll(start + (currentTarget - start) * eased);
 
     if (t < 1) {
-      requestAnimationFrame(step);
+      frame = requestAnimationFrame(step);
     } else {
       // Snap to target in case layout shifted during animation
-      setScroll(targetPosition);
+      setScroll(computeTargetPosition(node, scrollContainer, containerIsWindow));
       cleanup();
     }
   };
 
-  requestAnimationFrame(step);
+  frame = requestAnimationFrame(step);
 };
 
 const scrollNodeIntoViewWithOffset = (node: HTMLElement) => {
@@ -107,7 +126,7 @@ const scrollNodeIntoViewWithOffset = (node: HTMLElement) => {
   const containerIsWindow = scrollContainer === window;
   const targetPosition = computeTargetPosition(node, scrollContainer, containerIsWindow);
 
-  smoothScroll(scrollContainer, targetPosition);
+  smoothScroll(scrollContainer, targetPosition, node);
 
   return { scrollContainer, targetPosition };
 };
@@ -124,7 +143,7 @@ export const highlightNode = (node: HTMLElement) => {
   }, 1500);
 };
 
-export const scrollToElement = (element: HTMLElement) => {
-  if (!element) return;
+export const scrollToElement = (element: HTMLElement | undefined) => {
+  if (!element?.isConnected) return;
   scrollNodeIntoViewWithOffset(element);
 };
