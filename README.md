@@ -43,6 +43,8 @@ Load `dist-firefox/` as a temporary add-on (`about:debugging` > This Firefox > L
 
 **Drag** — Reposition the toggle button anywhere on screen.
 
+**Outline settings** — Open the gear button to choose heading depth 1–6 (default 4) and three width presets: Narrow (320px), Standard (420px, default), and Wide (640px). Preferences persist locally and synchronize between tabs. Narrow windows temporarily reduce the displayed width. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |

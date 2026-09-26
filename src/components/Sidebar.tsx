@@ -13,6 +13,8 @@ import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
 import { chatgptMarkdown } from '../providers/chatgptContent';
+import { useOutlineSettings } from '../hooks/useOutlineSettings';
+import { getHeadingLevel, getOutlineWidth } from '../lib/outlineSettings';
 import DOMPurify from 'dompurify';
 const CONTEXT_HINT_KEY = 'scroll-pro-context-hint-seen';
 const LINE_CLAMP_KEY = 'scroll-pro-line-clamp';
@@ -139,23 +141,23 @@ const loadSidebarPosition = (storageKey: string): SidebarPosition => {
     }
 };
 
-const getEstimatedSidebarSize = () => {
+const getEstimatedSidebarSize = (preferredWidth = 420) => {
     if (typeof window === 'undefined') {
-        return { width: 360, height: 480 };
+        return { width: preferredWidth, height: 480 };
     }
 
-    const width = Math.min(360, window.innerWidth * 0.94);
+    const width = Math.min(preferredWidth, window.innerWidth - SIDEBAR_MARGIN * 2);
     const maxHeight = Math.max(140, window.innerHeight - SIDEBAR_MARGIN * 2);
     const height = Math.min(window.innerHeight * 0.72, maxHeight);
     return { width, height };
 };
 
-const getSidebarOpenDirection = (pos: SidebarPosition): SidebarOpenDirection => {
+const getSidebarOpenDirection = (pos: SidebarPosition, preferredWidth = 420): SidebarOpenDirection => {
     if (typeof window === 'undefined') {
         return { x: 'right', y: 'down' };
     }
 
-    const { width, height } = getEstimatedSidebarSize();
+    const { width, height } = getEstimatedSidebarSize(preferredWidth);
     const spaceLeft = pos.x + SIDEBAR_TOGGLE_SIZE - SIDEBAR_MARGIN;
     const spaceRight = window.innerWidth - SIDEBAR_MARGIN - pos.x;
     const spaceUp = pos.y - SIDEBAR_MARGIN;
@@ -241,6 +243,10 @@ type SidebarProps = {
 
 export default function Sidebar({ turns, providerName, container, isOpen, isPaused, onToggle }: SidebarProps) {
     const [viewLevel, setViewLevel] = useState<1 | 2>(2); // 1=Prompts, 2=All
+    const { depth, width, updateDepth, updateWidth } = useOutlineSettings();
+    const widthRef = useRef(width);
+    widthRef.current = width;
+    const [showSettings, setShowSettings] = useState(false);
     const [search, setSearch] = useState('');
     const [progress, setProgress] = useState(0);
     const [lineClamp, setLineClamp] = useState<number>(() => getLineClamp());
@@ -301,7 +307,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const applySidebarPosition = useCallback((pos: { x: number; y: number }) => {
         const resolved = createSidebarPositionFromPoint(pos);
         dragPositionRef.current = resolved;
-        const direction = getSidebarOpenDirection(resolved);
+        const direction = getSidebarOpenDirection(resolved, widthRef.current);
         dragOpenDirectionRef.current = direction;
 
         const shell = sidebarShellRef.current;
@@ -310,6 +316,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             shell.style.setProperty('--sidebar-y', `${resolved.y}px`);
             shell.dataset.openX = direction.x;
             shell.dataset.openY = direction.y;
+            shell.style.setProperty('--sidebar-width', `${getOutlineWidth(widthRef.current, window.innerWidth, resolved.x, direction.x)}px`);
         }
     }, []);
 
@@ -482,9 +489,18 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             window.removeEventListener('pointermove', handleTogglePointerMove, true);
             window.removeEventListener('pointerup', handleTogglePointerUp, true);
             window.removeEventListener('pointercancel', handleTogglePointerUp, true);
+            const pointerId = dragStateRef.current.pointerId;
+            if (pointerId !== null) {
+                try { toggleButtonRef.current?.releasePointerCapture(pointerId); } catch {}
+            }
+            dragStateRef.current.pointerId = null;
+            dragStateRef.current.isDragging = false;
+            dragPositionRef.current = null;
+            dragOpenDirectionRef.current = null;
+            setIsDragging(false);
             setDragStyles(false);
         };
-    }, [handleTogglePointerMove, handleTogglePointerUp, setDragStyles]);
+    }, [isOpen, handleTogglePointerMove, handleTogglePointerUp, setDragStyles]);
 
     const preserveSidebarScroll = (callback: () => void) => {
         const list = document.querySelector('.scroll-pro-sidebar-list') as HTMLElement;
@@ -595,6 +611,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             if (showHeadings && block.answer) {
                 if (block.headings.length > 0) {
                     block.headings.forEach((h, idx) => {
+                        if (getHeadingLevel(h) > depth) return;
                         items.push({ key: `${block.key}-heading-${idx}`, kind: 'heading', block, heading: h });
                     });
                 } else {
@@ -603,7 +620,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             }
         });
         return items;
-    }, [filteredBlocks, viewLevel]);
+    }, [filteredBlocks, viewLevel, depth]);
 
     const focusIndexByKey = useMemo(() => {
         const map = new Map<string, number>();
@@ -1023,11 +1040,24 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         }
     }, [isOpen, isPaused]); // Removed turns and findVisibleTurnIndex to prevent aggressive re-sync
 
+    const previousFocusItems = useRef(focusableItems);
     useEffect(() => {
+        const previous = previousFocusItems.current[focusedIndex];
+        previousFocusItems.current = focusableItems;
+        if (previous) {
+            let next = focusableItems.findIndex(item => item.key === previous.key);
+            if (next < 0 && previous.kind === 'heading') {
+                const originalIndex = previous.block.headings.indexOf(previous.heading!);
+                const parent = previous.block.headings.slice(0, originalIndex).map((heading, index) => ({ heading, index })).reverse().find(({ heading }) => getHeadingLevel(heading) <= depth);
+                const parentKey = parent ? `${previous.block.key}-heading-${parent.index}` : previous.block.key;
+                next = focusableItems.findIndex(item => item.key === parentKey);
+            }
+            if (next >= 0) { setFocusedIndex(next); return; }
+        }
         if (focusedIndex >= focusableItems.length && focusableItems.length > 0) {
             setFocusedIndex(focusableItems.length - 1);
         }
-    }, [focusableItems.length]);
+    }, [focusableItems, depth]);
 
     useEffect(() => {
         const handleStorage = (event: StorageEvent) => {
@@ -1469,7 +1499,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         : sidebarPosition;
     const effectiveDirection = isDragging && dragOpenDirectionRef.current
         ? dragOpenDirectionRef.current
-        : getSidebarOpenDirection(effectivePosition);
+        : getSidebarOpenDirection(effectivePosition, width);
 
     return (
         <div
@@ -1479,6 +1509,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             data-open-y={effectiveDirection.y}
             style={{
                 ['--sidebar-line-clamp' as string]: lineClamp,
+                ['--sidebar-width' as string]: `${getOutlineWidth(width, window.innerWidth, effectivePosition.x, effectiveDirection.x)}px`,
                 ['--sidebar-x' as string]: `${effectivePosition.x}px`,
                 ['--sidebar-y' as string]: `${effectivePosition.y}px`,
             }}
@@ -1526,6 +1557,9 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                 </button>
                             </div>
                             <div className="scroll-pro-actions" role="group" aria-label="Chat actions">
+                                <button className={`scroll-pro-action-btn ${showSettings ? 'is-active' : ''}`} aria-label="Outline settings" aria-expanded={showSettings} onClick={() => setShowSettings(value => !value)}>
+                                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>
+                                </button>
                                 <button
                                     data-action="copy-format"
                                     onClick={handleCopyFullChat}
@@ -1568,6 +1602,27 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                             </div>
                         </div>
 
+                        {showSettings && (
+                            <div className="scroll-pro-outline-settings">
+                                <div className="scroll-pro-setting-row">
+                                    <span className="scroll-pro-setting-label">Heading depth</span>
+                                    <div className="scroll-pro-setting-select">
+                                        <select aria-label="Heading depth" value={depth} onChange={e => updateDepth(Number(e.target.value))}>
+                                            {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={level}>H1–H{level}</option>)}
+                                        </select>
+                                        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                                    </div>
+                                </div>
+                                <div className="scroll-pro-setting-row">
+                                    <span className="scroll-pro-setting-label">Width</span>
+                                    <div className="scroll-pro-width-options" role="group" aria-label="Outline width">
+                                        {[{ label: 'Narrow', value: 320 }, { label: 'Standard', value: 420 }, { label: 'Wide', value: 640 }].map(option => (
+                                            <button key={option.value} type="button" aria-pressed={width === option.value} onClick={() => updateWidth(option.value)}>{option.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="scroll-pro-search">
                             <svg className="scroll-pro-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                             <input
@@ -1630,11 +1685,15 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                             <div className="scroll-pro-subheading-list">
                                                 {block.headings.length > 0 ? (
                                                     block.headings.map((h, i) => {
+                                                        if (getHeadingLevel(h) > depth) return null;
                                                         const headingKey = `${block.key}-heading-${i}`;
                                                         const headingFocusIndex = focusIndexByKey.get(headingKey) ?? -1;
                                                         return (
                                                             <button
                                                                 key={headingKey}
+                                                                data-outline-level={getHeadingLevel(h)}
+                                                                title={h.innerText}
+                                                                style={{ paddingLeft: `${8 + (getHeadingLevel(h) - 1) * 12}px` }}
                                                                 ref={(el) => {
                                                                     if (el) {
                                                                         itemRefs.current.set(headingKey, el);

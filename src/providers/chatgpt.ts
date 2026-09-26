@@ -1,3 +1,4 @@
+import { inferChatGptOutlineLevels } from './chatgptHeadingLevels';
 import type { Provider, Turn } from '../types';
 import { CHATGPT_TURN_SELECTOR, chatgptContentElement, chatgptMarkdown } from './chatgptContent';
 
@@ -8,11 +9,14 @@ const fallbackId = (node: HTMLElement) => {
     return `node-${nodeIds.get(node)}`;
 };
 
-const headingList = (content: HTMLElement) =>
-    Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).map((heading, index) => {
+const headingList = (content: HTMLElement) => {
+    const headings = Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).map((heading, index) => {
         const text = (heading.innerText || heading.textContent || '').trim();
         return { innerText: text || `Section ${index + 1}`, element: heading, tagName: heading.tagName, isPlaceholder: !text };
     });
+    const levels = inferChatGptOutlineLevels(headings.map(h => ({ text: h.innerText, tagName: h.tagName })));
+    return headings.map((heading, index) => ({ ...heading, outlineLevel: levels[index] }));
+};
 
 const makeTurn = (root: HTMLElement, content: HTMLElement, role: Turn['role'], id: string, turnId?: string): Turn => ({
     id,

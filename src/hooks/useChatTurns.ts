@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Provider, Turn } from '../types';
+import { inferChatGptOutlineLevels } from '../providers/chatgptHeadingLevels';
 import { chatgpt } from '../providers/chatgpt';
 import { claude } from '../providers/claude';
 import { gemini } from '../providers/gemini';
@@ -44,6 +45,8 @@ export function useChatTurns() {
                             heading.isPlaceholder = false;
                         }
                     });
+                    const levels = inferChatGptOutlineLevels(turn.headings.map(h => ({ text: h.innerText, tagName: h.tagName })));
+                    turn.headings.forEach((heading, index) => { heading.outlineLevel = levels[index]; });
                 }
             }
             setTurns(next);

@@ -2,6 +2,7 @@ export interface Heading {
     innerText: string;
     element: HTMLElement;
     tagName: string;
+    outlineLevel?: number;
     isPlaceholder?: boolean;
 }
 
