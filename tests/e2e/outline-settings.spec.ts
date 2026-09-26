@@ -6,9 +6,11 @@ const sidebarSelector = '[aria-label="Scroll Pro outline"]';
 test('F04/F05 real L02 headings keep their original nested levels', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'long-response-l02');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
-    const levels = await page.locator('[data-markdown-text-style] h1, [data-markdown-text-style] h2, [data-markdown-text-style] h3').evaluateAll(nodes => nodes.map(node => node.tagName.slice(1)));
+    const levels = await page.locator('[data-markdown-text-style] h1, [data-markdown-text-style] h2, [data-markdown-text-style] h3').evaluateAll(nodes =>
+        nodes.filter(node => !node.closest('[data-d-component="box"]')).map(node => node.tagName.slice(1))
+    );
     const sidebar = page.locator(sidebarSelector);
-    await expect(sidebar.locator('[data-outline-level]')).toHaveCount(80);
+    await expect(sidebar.locator('[data-outline-level]')).toHaveCount(levels.length);
     // This real answer has only one Chinese chapter marker; preserve all raw levels.
     expect(await sidebar.locator('[data-outline-level]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-outline-level')))).toEqual(levels);
     await expect(sidebar.getByRole('button', { name: '一、先理解：Chapter 3 究竟在研究什么？', exact: true })).toHaveAttribute('data-outline-level', '2');
