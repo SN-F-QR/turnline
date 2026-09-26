@@ -154,6 +154,28 @@ test('F02 overlapping legacy wrapper does not duplicate a current turn [P4 synth
   await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
 });
 
+test('F02 history keeps one navigable turn when a fallback search key is replaced', async ({ extensionContext, extensionPage }) => {
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await extensionPage.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-turn-key]')!;
+    root.querySelectorAll<HTMLElement>('[data-content-search-unit-key]').forEach(unit => {
+      unit.setAttribute('data-content-search-unit-key', unit.getAttribute('data-content-search-unit-key')!.replace('fallback-turn-0', 'resolved-turn-0'));
+    });
+    root.querySelector('h2')!.textContent = 'Orbit Resolved';
+  });
+  await expect(sidebar.getByRole('button', { name: 'Orbit Resolved' })).toBeVisible();
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toHaveCount(0);
+  await sidebar.getByRole('button', { name: 'Orbit Resolved' }).click();
+  await expect.poll(() => extensionPage.getByRole('heading', { name: 'Orbit Resolved' }).evaluate(heading => {
+    const target = heading.getBoundingClientRect();
+    const scroller = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
+    return target.top >= scroller.top && target.top < scroller.bottom;
+  })).toBe(true);
+});
+
 test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);

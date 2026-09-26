@@ -58,10 +58,13 @@ export const chatgpt: Provider = {
                     if (!role) continue;
                     const content = chatgptContentElement(unit, role);
                     if (!content) continue;
-                    const id = `gpt-${turnKey}:${unitKey}`;
+                    // The prefix can change from fallback-turn to a resolved search key
+                    // while the same conversation turn stays mounted.
+                    const unitSlot = unitKey.match(/:\d+:(?:user|assistant)$/)?.[0] || `:${unitKey}`;
+                    const id = `gpt-${turnKey}${unitSlot}`;
                     if (seenIds.has(id)) continue;
                     seenIds.add(id);
-                    turns.push(makeTurn(unit, content, role, id, `${turnKey}:${unitKey}`));
+                    turns.push(makeTurn(unit, content, role, id, `${turnKey}${unitSlot}`));
                     found = true;
                 }
                 if (found) {

@@ -47,6 +47,10 @@ export function useChatTurns(isOpen: boolean) {
         controller.current?.abort();
         await running.current;
         const until = performance.now() + 2500;
+        let searchScroller: HTMLElement | null = null;
+        let searchRange = -1;
+        let lower = 0;
+        let upper = 0;
         while (request === navigation.current && location.href === url) {
             const snapshot = readRef.current();
             const turn = snapshot.live.find(item => item.id === id);
@@ -57,11 +61,28 @@ export function useChatTurns(isOpen: boolean) {
             if (performance.now() > until) break;
             const wanted = snapshot.turns.findIndex(item => item.id === id);
             const firstLive = snapshot.turns.findIndex(item => item.id === snapshot.live[0]?.id);
+            const lastLive = snapshot.turns.findIndex(item => item.id === snapshot.live.at(-1)?.id);
+            if (wanted < 0 || firstLive < 0 || lastLive < 0) break;
             const scroller = findScrollable(snapshot.live[0]?.element || null);
             const reverse = getComputedStyle(scroller).flexDirection === 'column-reverse';
-            const range = scroller.scrollHeight - scroller.clientHeight;
+            const range = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+            if (scroller !== searchScroller || searchRange === 0) {
+                searchScroller = scroller;
+                lower = reverse ? -range : 0;
+                upper = reverse ? 0 : range;
+            } else if (searchRange > 0 && range !== searchRange) {
+                lower *= range / searchRange;
+                upper *= range / searchRange;
+            }
+            searchRange = range;
+            const current = scroller.scrollTop;
+            if (wanted < firstLive) upper = Math.min(upper, current);
+            else if (wanted > lastLive) lower = Math.max(lower, current);
+            else break;
+            const next = (lower + upper) / 2;
+            if (Math.abs(next - current) < 1) break;
             readRef.current(wanted < firstLive ? 'older' : 'newer');
-            scroller.scrollTo({ top: wanted < firstLive ? (reverse ? -range : 0) : (reverse ? 0 : range), behavior: 'instant' });
+            scroller.scrollTo({ top: next, behavior: 'instant' });
             await new Promise(resolve => setTimeout(resolve, 150));
         }
         return request !== navigation.current || location.href !== url;

@@ -113,6 +113,44 @@ test('F09 positive scroll layout keeps the target in its nested viewport [P4]', 
   })).toBe(true);
 });
 
+test('F09 navigation reaches a middle turn that is absent from both virtual window edges', async ({ extensionContext, extensionPage }) => {
+  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
+  await loadScenario(extensionContext, extensionPage, 'long-response-l01');
+  await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  const turnKey = await extensionPage.locator('[data-turn-key]').nth(2).getAttribute('data-turn-key');
+  const target = sidebar.locator(`[data-block-key="block-gpt-${turnKey}:0:user"]`);
+  await extensionPage.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>('.thread-scroll-container')!;
+    const slots = Array.from(document.querySelectorAll<HTMLElement>('[data-turn-key]')).map(root => {
+      const placeholder = document.createElement('div');
+      placeholder.style.height = `${root.getBoundingClientRect().height}px`;
+      root.replaceWith(placeholder);
+      return { root, placeholder };
+    });
+    const update = () => {
+      const range = scroller.scrollHeight - scroller.clientHeight;
+      const position = range ? -scroller.scrollTop / range : 0;
+      const active = position < 0.25 ? 4 : position > 0.75 ? 0 : 2;
+      slots.forEach(({ root, placeholder }, index) => {
+        if (index === active && placeholder.isConnected) placeholder.replaceWith(root);
+        if (index !== active && root.isConnected) root.replaceWith(placeholder);
+      });
+    };
+    scroller.addEventListener('scroll', update);
+    update();
+  });
+  await expect(extensionPage.locator('[data-turn-key]')).toHaveCount(1);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(5);
+  await target.locator('.scroll-pro-item-title').click();
+  await expect(extensionPage.locator(`[data-turn-key="${turnKey}"]`)).toBeAttached();
+  await expect.poll(() => extensionPage.locator(`[data-turn-key="${turnKey}"] [data-user-message-bubble]`).evaluate(node => {
+    const view = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
+    return node.getBoundingClientRect().top >= view.top && node.getBoundingClientRect().top < view.bottom;
+  })).toBe(true);
+});
+
 test('F15 L01 outline discovers older turns without manual chat scrolling [P7]', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   const anchor = await extensionPage.locator('[data-content-search-unit-key$=":assistant"]').first().evaluate(el => ({ key: el.getAttribute('data-content-search-unit-key'), top: el.getBoundingClientRect().top }));
