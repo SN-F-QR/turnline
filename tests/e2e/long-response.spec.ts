@@ -58,9 +58,6 @@ test('F15 L01 outline discovers older turns without manual chat scrolling [P7]',
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
   await expect(sidebar).toBeVisible();
-  const dismiss = sidebar.getByRole('button', { name: 'Dismiss' });
-  await expect(dismiss).toBeVisible();
-  await dismiss.click();
   await expect(extensionPage.locator('[data-turn-key]').first()).toHaveAttribute('data-turn-key', expected.loaded.turnKeys[0]);
   await expect(sidebar).toContainText(expected.loaded.newPrompt!);
 });

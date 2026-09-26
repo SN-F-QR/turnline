@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Turn } from '../types';
 import type { CapturedTurn, ExportBlock } from '../types/messages';
 import { scrollToElement } from '../lib/scroll';
@@ -13,9 +12,6 @@ import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import DOMPurify from 'dompurify';
-import whatsNextImg from '../../assets/whats-next.png';
-
-const UPDATE_BANNER_KEY = 'scroll-pro-update-21-seen';
 const CONTEXT_HINT_KEY = 'scroll-pro-context-hint-seen';
 const LINE_CLAMP_KEY = 'scroll-pro-line-clamp';
 const COPY_MARKDOWN_KEY = 'scroll-pro-copy-markdown';
@@ -247,7 +243,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const [progress, setProgress] = useState(0);
     const [lineClamp, setLineClamp] = useState<number>(() => getLineClamp());
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
-    const [lastFocusedKey, setLastFocusedKey] = useState<string | null>(null);
     const [exportFormat, setExportFormat] = useState<'md' | 'pdf' | 'txt' | 'json'>('md');
     const captureInProgressRef = useRef(false);
     const [showCaptureConsent, setShowCaptureConsent] = useState(false);
@@ -265,15 +260,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const [copyFormatMenu, setCopyFormatMenu] = useState<{ x: number; y: number } | null>(null);
     const copyFormatMenuRef = useRef<HTMLDivElement | null>(null);
     const [copyWithMarkdown, setCopyWithMarkdown] = useState<boolean>(false);
-    const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-    const [bannerDismissed, setBannerDismissed] = useState(true);
-    const [showHelp, setShowHelp] = useState(false);
     const contextHintShown = useRef(false);
     const storageKey = getSidebarStorageKey(providerName);
     const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => loadSidebarPosition(storageKey));
     const [isDragging, setIsDragging] = useState(false);
     const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
-    const searchInputRef = useRef<HTMLInputElement | null>(null);
     const sidebarShellRef = useRef<HTMLDivElement | null>(null);
     const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
     const sidebarPositionRef = useRef<SidebarPosition>(sidebarPosition);
@@ -292,36 +283,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     const dragBodyStyleRef = useRef<{ userSelect: string; cursor: string } | null>(null);
     const ignoreNextPositionWriteRef = useRef(false);
     const hasInitializedFocus = useRef(false);
-    const userInteractionRef = useRef(false);
     const isHoveringSidebar = useRef(false);
     const isSmoothPursuit = useRef(false);
 
     const turnsRef = useRef(turns);
     useEffect(() => { turnsRef.current = turns; }, [turns]);
-
-    useEffect(() => {
-        try {
-            chrome.storage.local.get([UPDATE_BANNER_KEY], (result) => {
-                if (!result[UPDATE_BANNER_KEY]) {
-                    setBannerDismissed(false);
-                }
-            });
-        } catch {}
-    }, []);
-
-    useEffect(() => {
-        if (isOpen && !bannerDismissed && !showUpdateBanner) {
-            setShowUpdateBanner(true);
-        }
-    }, [isOpen, bannerDismissed, showUpdateBanner]);
-
-    const dismissUpdateBanner = useCallback(() => {
-        setShowUpdateBanner(false);
-        setBannerDismissed(true);
-        try {
-            chrome.storage.local.set({ [UPDATE_BANNER_KEY]: true });
-        } catch {}
-    }, []);
 
     const providerLabel = useMemo(() => {
         if (providerName === 'chatgpt') return 'ChatGPT';
@@ -619,8 +585,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         return list;
     }, [turns]);
 
-    const normalizedSearch = search.trim().toLowerCase();
-
     const filteredBlocks = useMemo(() => {
         const term = search.toLowerCase().trim();
         const showHeadings = viewLevel === 2;
@@ -639,17 +603,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
 
     type FocusItem =
         | { key: string; kind: 'block'; block: Block }
-        | { key: string; kind: 'heading'; block: Block; heading?: Turn['headings'][number] }
-        | { key: string; kind: 'command'; command: 'export' };
+        | { key: string; kind: 'heading'; block: Block; heading?: Turn['headings'][number] };
 
     const focusableItems: FocusItem[] = useMemo(() => {
         const showHeadings = viewLevel === 2;
         const items: FocusItem[] = [];
-
-        const showExport = normalizedSearch === '/export' || normalizedSearch === '/e' || normalizedSearch === '/ex';
-        if (showExport) {
-            items.push({ key: 'export-command', kind: 'command', command: 'export' });
-        }
 
         filteredBlocks.forEach((block) => {
             items.push({ key: block.key, kind: 'block', block });
@@ -664,7 +622,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             }
         });
         return items;
-    }, [filteredBlocks, viewLevel, normalizedSearch]);
+    }, [filteredBlocks, viewLevel]);
 
     const focusIndexByKey = useMemo(() => {
         const map = new Map<string, number>();
@@ -1035,44 +993,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         setShowCaptureConsent(false);
     }, []);
 
-    const handleSearchKeyDown = useCallback((e: ReactKeyboardEvent<HTMLInputElement>) => {
-        e.stopPropagation(); // Always stop propagation from search input
-        const trimmed = search.trim().toLowerCase();
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            setSearch('');
-            searchInputRef.current?.blur();
-            sidebarShellRef.current?.focus();
-            return;
-        }
-
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            searchInputRef.current?.blur();
-            sidebarShellRef.current?.focus();
-            return;
-        }
-
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (trimmed === '/export' || trimmed === '/e' || trimmed === '/ex') {
-                startExport();
-                setSearch('');
-            }
-            searchInputRef.current?.blur();
-            sidebarShellRef.current?.focus();
-        }
-    }, [search, startExport]);
-
-    const stopSearchPropagation = useCallback((e: ReactKeyboardEvent<HTMLInputElement>) => {
-        e.stopPropagation();
-    }, []);
-
-    useEffect(() => {
-        return () => {};
-    }, []);
-
     const findVisibleTurnIndex = useCallback(() => {
         if (!turns.length) return -1;
 
@@ -1144,7 +1064,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 }
             }
 
-            sidebarShellRef.current?.focus();
         }
 
         if (!isOpen) {
@@ -1186,61 +1105,40 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
     }, [isOpen, contextMenu, exportFormatMenu, copyFormatMenu]);
 
     useEffect(() => {
-        if (!isOpen || isPaused) return;
-        const id = window.setTimeout(() => {
-            if (focusedIndex < 0 || focusedIndex === 0) {
-                searchInputRef.current?.focus();
-                searchInputRef.current?.select();
-            }
-        }, 100); // Small delay to let scroll settle
-        return () => window.clearTimeout(id);
-    }, [isOpen, isPaused]);
+        const menu = contextMenuRef.current || exportFormatMenuRef.current || copyFormatMenuRef.current;
+        menu?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    }, [contextMenu, exportFormatMenu, copyFormatMenu]);
 
     useEffect(() => {
         if (!contextMenu) return;
         const close = () => setContextMenu(null);
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') close();
-        };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
-        window.addEventListener('keydown', handleKey);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
-            window.removeEventListener('keydown', handleKey);
         };
     }, [contextMenu]);
 
     useEffect(() => {
         if (!exportFormatMenu) return;
         const close = () => setExportFormatMenu(null);
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') close();
-        };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
-        window.addEventListener('keydown', handleKey);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
-            window.removeEventListener('keydown', handleKey);
         };
     }, [exportFormatMenu]);
 
     useEffect(() => {
         if (!copyFormatMenu) return;
         const close = () => setCopyFormatMenu(null);
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') close();
-        };
         window.addEventListener('scroll', close, true);
         window.addEventListener('resize', close);
-        window.addEventListener('keydown', handleKey);
         return () => {
             window.removeEventListener('scroll', close, true);
             window.removeEventListener('resize', close);
-            window.removeEventListener('keydown', handleKey);
         };
     }, [copyFormatMenu]);
 
@@ -1285,183 +1183,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         showToast(copyWithMarkdown ? 'Full chat copied (markdown)' : 'Full chat copied');
         maybeShowContextHint();
     }, [blocks, copyWithMarkdown, getTurnCopyText, showToast, maybeShowContextHint]);
-
-    useEffect(() => {
-        if (!isOpen || isPaused) return;
-
-        const handler = (e: KeyboardEvent) => {
-            if (document.activeElement === searchInputRef.current) return;
-
-            const target = e.target as HTMLElement | null;
-            const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-
-            if (typing && target !== sidebarShellRef.current) return;
-
-            if (e.key === 'Escape' || (e.key === "'" && e.metaKey)) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (showHelp) {
-                    setShowHelp(false);
-                } else {
-                    onToggle();
-                }
-                return;
-            }
-
-            if (e.key === 'Backspace' && showHelp) {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowHelp(false);
-                return;
-            }
-
-            const lowerKey = e.key?.toLowerCase();
-            const hasChord = e.metaKey || e.ctrlKey;
-            if (hasChord && e.code === 'Space') {
-                e.preventDefault();
-                e.stopPropagation();
-                setViewLevel((prev) => (prev === 1 ? 2 : 1));
-                return;
-            }
-            if (hasChord && ['c', 'x', 'z', 'm', 'e', ';', "'"].includes(lowerKey)) {
-                const selection = document.getSelection();
-                const shell = sidebarShellRef.current;
-                const anchor = selection?.anchorNode || selection?.focusNode || null;
-                if (selection && selection.toString().trim().length > 0 && shell && anchor && !shell.contains(anchor)) {
-                    return;
-                }
-
-                if (lowerKey === ';' || lowerKey === "'") {
-                    onToggle();
-                    return;
-                }
-
-                if (lowerKey === 'c' && e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCopyFullChat();
-                    return;
-                }
-
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (lowerKey === 'e') {
-                    startExport();
-                    showToast(providerName === 'chatgpt' ? 'Preparing full export...' : 'Chat exported');
-                    return;
-                }
-
-                if (lowerKey === 'm') {
-                    setCopyWithMarkdown((prev) => {
-                        const next = !prev;
-                        showToast(next ? 'Markdown copy: On' : 'Markdown copy: Off');
-                        return next;
-                    });
-                    return;
-                }
-
-                const item = focusableItems[focusedIndex];
-                if (item) {
-                    if (item.kind === 'command' && lowerKey === 'e') {
-                        startExport();
-                        showToast(providerName === 'chatgpt' ? 'Preparing full export...' : 'Chat exported');
-                        return;
-                    }
-                    if (item.kind === 'block') {
-                        const { block } = item;
-                        let textToCopy = '';
-                        let toastText = '';
-
-                        if (lowerKey === 'z' && block.answer) {
-                            const promptText = getTurnCopyText(block.prompt);
-                            const answerText = getTurnCopyText(block.answer);
-                            textToCopy = `Q: ${promptText}\n\nA: ${answerText}`;
-                            toastText = copyWithMarkdown ? 'Q&A copied (markdown)' : 'Q&A copied!';
-                        } else if (lowerKey === 'c' && block.answer) {
-                            textToCopy = getTurnCopyText(block.answer);
-                            toastText = copyWithMarkdown ? 'Response copied (markdown)' : 'Response copied!';
-                        } else if (lowerKey === 'x') {
-                            textToCopy = getTurnCopyText(block.prompt);
-                            toastText = copyWithMarkdown ? 'Prompt copied (markdown)' : 'Prompt copied!';
-                        }
-                        if (textToCopy) {
-                            copyToClipboard(textToCopy);
-                            showToast(toastText);
-                        }
-                    }
-                }
-                return;
-            }
-
-            if (e.key === '?') {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowHelp(prev => !prev);
-                return;
-            }
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                e.stopPropagation();
-                userInteractionRef.current = true;
-                if (e.shiftKey) {
-                    setFocusedIndex(prev => {
-                        let next = prev + 1;
-                        while (next < focusableItems.length) {
-                            if (focusableItems[next].kind === 'block') return next;
-                            next++;
-                        }
-                        return prev; // Stay if no next prompt
-                    });
-                } else {
-                    setFocusedIndex(prev => Math.min(prev + 1, focusableItems.length - 1));
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                e.stopPropagation();
-                userInteractionRef.current = true;
-                if (e.shiftKey) {
-                    setFocusedIndex(prev => {
-                        let next = prev - 1;
-                        while (next >= 0) {
-                            if (focusableItems[next].kind === 'block') return next;
-                            next--;
-                        }
-                        return prev; // Stay if no prev prompt
-                    });
-                } else {
-                    setFocusedIndex(prev => Math.max(prev - 1, 0));
-                }
-            } else if (e.key === 'Tab' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                e.preventDefault();
-                e.stopPropagation();
-                setViewLevel(prev => prev === 1 ? 2 : 1);
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                e.stopPropagation();
-                const item = focusableItems[focusedIndex];
-                if (item) {
-                    if (item.kind === 'heading' && item.heading?.element) {
-                        scrollToElement(item.heading.element);
-                    } else if (item.kind === 'block' && item.block.prompt.element) {
-                        scrollToElement(item.block.prompt.element);
-                    } else if (item.kind === 'command' && item.command === 'export') {
-                        startExport();
-                        if (providerName === 'chatgpt') {
-                            showToast('Preparing full export...');
-                        } else {
-                            showToast('Chat exported');
-                        }
-                        setSearch('');
-                    }
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handler, true); // Capture phase to beat Claude
-        return () => window.removeEventListener('keydown', handler, true);
-    }, [copyWithMarkdown, focusableItems, focusedIndex, getTurnCopyText, isOpen, isPaused, onToggle, providerName, showHelp, showToast, startExport]);
 
     // Capture-phase contextmenu handler (beats host page interception)
     const filteredBlocksRef = useRef(filteredBlocks);
@@ -1529,17 +1250,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
         if (!item) return;
         const el = itemRefs.current.get(item.key);
         if (el) {
-            const behavior = userInteractionRef.current || isSmoothPursuit.current ? 'smooth' : 'auto';
+            const behavior = isSmoothPursuit.current ? 'smooth' : 'auto';
 
             const block = isSmoothPursuit.current ? 'center' : 'nearest';
 
             el.scrollIntoView({ behavior, block });
 
-            if (userInteractionRef.current) {
-                setTimeout(() => {
-                    userInteractionRef.current = false;
-                }, 50);
-            }
             if (isSmoothPursuit.current) {
                 setTimeout(() => {
                     isSmoothPursuit.current = false;
@@ -1547,17 +1263,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
             }
         }
     }, [focusedIndex, focusableItems]);
-
-    useEffect(() => {
-        if (focusedIndex < 0) return;
-        const item = focusableItems[focusedIndex];
-        if (item?.kind === 'block') {
-            const blockKey = item.block.key;
-            if (blockKey && blockKey !== lastFocusedKey) {
-                setLastFocusedKey(blockKey);
-            }
-        }
-    }, [focusedIndex, focusableItems, lastFocusedKey]);
 
     const renderContextMenu = () => {
         if (!contextMenu) return null;
@@ -1592,21 +1297,24 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 className="scroll-pro-context-menu"
                 style={{ top: contextMenu.y, left: contextMenu.x }}
                 ref={contextMenuRef}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        event.stopPropagation();
+                        setContextMenu(null);
+                    }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => e.preventDefault()}
             >
                 <button className="scroll-pro-context-item" onClick={onCopyResponse} disabled={!hasAnswer}>
                     <span className="scroll-pro-context-label">Copy response</span>
-                    <span className="scroll-pro-context-kbd">⌘/Ctrl+C</span>
                 </button>
                 <button className="scroll-pro-context-item" onClick={onCopyQA} disabled={!hasAnswer}>
                     <span className="scroll-pro-context-label">Copy Q&A</span>
-                    <span className="scroll-pro-context-kbd">⌘/Ctrl+Z</span>
                 </button>
                 <button className="scroll-pro-context-item" onClick={onCopyPrompt}>
                     <span className="scroll-pro-context-label">Copy prompt</span>
-                    <span className="scroll-pro-context-kbd">⌘/Ctrl+X</span>
                 </button>
                 <div className="scroll-pro-context-divider" role="separator" />
                 <button
@@ -1618,7 +1326,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 >
                     <span className="scroll-pro-context-check" aria-hidden="true">{copyWithMarkdown ? '✓' : ''}</span>
                     <span className="scroll-pro-context-label">Markdown</span>
-                    <span className="scroll-pro-context-kbd">⌘/Ctrl+M</span>
                 </button>
             </div>
         );
@@ -1673,6 +1380,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 className="scroll-pro-context-menu"
                 style={{ top: adjustedY, left: adjustedX }}
                 ref={exportFormatMenuRef}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        event.stopPropagation();
+                        setExportFormatMenu(null);
+                    }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => e.preventDefault()}
@@ -1771,6 +1484,12 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                 className="scroll-pro-context-menu"
                 style={{ top: adjustedY, left: adjustedX }}
                 ref={copyFormatMenuRef}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        event.stopPropagation();
+                        setCopyFormatMenu(null);
+                    }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => e.preventDefault()}
@@ -1834,86 +1553,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                     onMouseEnter={() => isHoveringSidebar.current = true}
                     onMouseLeave={() => isHoveringSidebar.current = false}
                 >
-                    {showUpdateBanner ? (
-                        <div className="scroll-pro-update-banner">
-                            <button
-                                className="scroll-pro-update-banner-close"
-                                onClick={dismissUpdateBanner}
-                                aria-label="Dismiss"
-                            >
-                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <path d="M11 3L3 11M3 3l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                                </svg>
-                            </button>
-                            <h3 className="scroll-pro-update-banner-title">Scroll just got a big update</h3>
-                            <span className="scroll-pro-update-banner-subtitle">What's new</span>
-                            <ul className="scroll-pro-update-banner-list">
-                                <li>Copy &amp; export full conversations</li>
-                                <li>Cleaner, faster sidebar</li>
-                                <li>Drag the sidebar anywhere</li>
-                                <li>Right-click any turn for more options</li>
-                            </ul>
-                            <span className="scroll-pro-update-banner-subtitle">What's next</span>
-                            <p className="scroll-pro-update-banner-teaser">
-                                Scroll helps you navigate within chats. Soon you'll search across them too.
-                            </p>
-                            <img
-                                className="scroll-pro-update-banner-img"
-                                src={chrome.runtime.getURL(whatsNextImg)}
-                                alt="Command palette preview"
-                            />
-                            <a
-                                className="scroll-pro-update-banner-cta"
-                                href="https://tryscroll.app"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={dismissUpdateBanner}
-                            >
-                                Get early access
-                            </a>
-                            <button
-                                className="scroll-pro-update-banner-dismiss"
-                                onClick={dismissUpdateBanner}
-                            >
-                                Maybe later
-                            </button>
-                        </div>
-                    ) : showHelp ? (
-                        <div className="scroll-pro-help">
-                            <div className="scroll-pro-help-header">
-                                <h3 className="scroll-pro-help-title">Keyboard shortcuts</h3>
-                                <button
-                                    className="scroll-pro-update-banner-close"
-                                    onClick={() => setShowHelp(false)}
-                                    aria-label="Close help"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                        <path d="M11 3L3 11M3 3l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                                    </svg>
-                                </button>
-                            </div>
-                            <div className="scroll-pro-help-section">
-                                <span className="scroll-pro-help-label">Navigate</span>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>↑</kbd> <kbd>↓</kbd></span><span>Move between items</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>Enter</kbd></span><span>Scroll to item</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>Tab</kbd> <kbd>←</kbd> <kbd>→</kbd></span><span>Toggle Prompts / All</span></div>
-                            </div>
-                            <div className="scroll-pro-help-section">
-                                <span className="scroll-pro-help-label">Copy &amp; export</span>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd></span><span>Copy full chat</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>⌘</kbd><kbd>E</kbd></span><span>Export chat</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>⌘</kbd><kbd>C</kbd></span><span>Copy focused response</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>⌘</kbd><kbd>X</kbd></span><span>Copy focused prompt</span></div>
-                            </div>
-                            <div className="scroll-pro-help-section">
-                                <span className="scroll-pro-help-label">Other</span>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>⌘</kbd><kbd>M</kbd></span><span>Toggle markdown copy</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>?</kbd></span><span>Toggle this help</span></div>
-                                <div className="scroll-pro-help-row"><span className="scroll-pro-help-keys"><kbd>Esc</kbd></span><span>Close</span></div>
-                            </div>
-                            <p className="scroll-pro-help-tip">Right-click any turn or button for more options</p>
-                        </div>
-                    ) : (<>
                     <div className="scroll-pro-sidebar-head">
                         <div className="scroll-pro-sidebar-row">
                             <div className="scroll-pro-tab-group" role="group" aria-label="Outline filter">
@@ -1946,7 +1585,7 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                         });
                                     }}
                                     className="scroll-pro-action-btn"
-                                    title="Copy full chat (⌘⇧C) - Right-click for format"
+                                    title="Copy full chat - Right-click for format"
                                 >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1973,16 +1612,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                         <line x1="12" y1="15" x2="12" y2="3"></line>
                                     </svg>
                                 </button>
-                                <button
-                                    onClick={() => setShowHelp(prev => !prev)}
-                                    className={`scroll-pro-action-btn ${showHelp ? 'is-active' : ''}`}
-                                    title="Keyboard shortcuts (?)"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                                    </svg>
-                                </button>
                             </div>
                         </div>
 
@@ -1994,45 +1623,11 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="scroll-pro-search-input"
-                                ref={searchInputRef}
-                                onKeyDown={handleSearchKeyDown}
-                                onKeyUp={stopSearchPropagation}
-                                onKeyPress={stopSearchPropagation}
                             />
                         </div>
                     </div>
 
                     <div className="scroll-pro-sidebar-list">
-                        {(() => {
-                            const term = search.trim().toLowerCase();
-                            const showExport = term === '/export' || term === '/e' || term === '/ex';
-                            if (!showExport) return null;
-                            const exportFocusIdx = focusIndexByKey.get('export-command') ?? -1;
-                            return (
-                                <div
-                                    className={`scroll-pro-sidebar-item ${focusedIndex === exportFocusIdx ? 'is-focused' : ''}`}
-                                    onClick={() => {
-                                        startExport();
-                                        if (providerName === 'chatgpt') {
-                                            showToast('Preparing full export...');
-                                        } else {
-                                            showToast('Chat exported');
-                                        }
-                                        setSearch('');
-                                    }}
-                                    onMouseEnter={() => exportFocusIdx >= 0 && setFocusedIndex(exportFocusIdx)}
-                                    onFocus={() => exportFocusIdx >= 0 && setFocusedIndex(exportFocusIdx)}
-                                    tabIndex={0}
-                                >
-                                    <div className="scroll-pro-item-body">
-                                        <p className="scroll-pro-item-title">Export full chat ({exportFormat.toUpperCase()})</p>
-                                        <div className="scroll-pro-subheading-list">
-                                            <span className="scroll-pro-subheading-fallback">Downloads a {exportFormat.toUpperCase()} file of this conversation</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
                         {turns.length === 0 ? (
                             <div className="scroll-pro-empty">
                                 <div className="scroll-pro-empty-card">
@@ -2140,7 +1735,6 @@ export default function Sidebar({ turns, providerName, container, isOpen, isPaus
                             <div className="scroll-pro-empty">No items found</div>
                         )}
                     </div>
-                    </>)}
                 </div>
             )}
             {contextMenu && (

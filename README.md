@@ -48,31 +48,14 @@ Load `dist-firefox/` as a temporary add-on (`about:debugging` > This Firefox > L
 | Shortcut | Action |
 |----------|--------|
 | `Cmd/Ctrl + ;` | Toggle sidebar |
-| `Cmd/Ctrl + Shift + C` | Copy full chat |
-| `Cmd/Ctrl + E` | Export chat |
-| `Cmd/Ctrl + M` | Toggle markdown copy mode |
-| `Cmd/Ctrl + C` | Copy focused response |
-| `Cmd/Ctrl + X` | Copy focused prompt |
-| `Cmd/Ctrl + Z` | Copy focused Q&A pair |
-| `Arrow Up/Down` | Navigate items |
 
 ## How it works
 
 Scroll runs as a content script on ChatGPT, Claude, and Gemini. It watches the DOM for conversation turns using a MutationObserver and renders a sidebar table of contents inside a Shadow DOM.
 
-No data leaves your browser. No account required. No permissions beyond content script injection.
+No data leaves your browser. No account required. The extension uses the storage permission for local settings.
 
 **Tech stack:** TypeScript, React, Vite, Tailwind CSS v4, Manifest V3.
-
-## What's next
-
-Scroll helps you navigate within chats. Soon you'll search across all of them.
-
-<p align="center">
-  <img src="assets/whats-next.png" alt="Scroll command palette preview" width="600">
-</p>
-
-[Get early access at tryscroll.app](https://tryscroll.app)
 
 ## Contributing
 

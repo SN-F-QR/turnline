@@ -6,10 +6,6 @@ async function openOutline(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = page.getByRole('complementary', { name: 'Scroll Pro outline' });
   await expect(sidebar).toBeVisible();
-  const dismiss = sidebar.getByRole('button', { name: 'Dismiss' });
-  // P1 baseline still shows the first-run promotion. P2 removes this step.
-  await expect(dismiss).toBeVisible();
-  await dismiss.click();
   return sidebar;
 }
 
@@ -25,6 +21,84 @@ test('current ChatGPT capture: extension mounts and outline opens', async ({ ext
   await expect(extensionPage.locator('[data-markdown-text-style] h2, [data-markdown-text-style] h3')).toHaveText(expected.headings);
   await expect(extensionPage.locator('.thread-scroll-container')).toHaveCSS('flex-direction', 'column-reverse');
   await openOutline(extensionPage);
+});
+
+test('F11: first run opens outline directly and only the toggle shortcut is handled [P2]', async ({ extensionContext, extensionPage }) => {
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('button', { name: 'Dismiss' })).toHaveCount(0);
+  await expect(sidebar.getByText('Scroll just got a big update')).toHaveCount(0);
+
+  const command = await extensionPage.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control');
+  const filter = sidebar.getByPlaceholder('Filter…');
+  await filter.fill('test');
+  await extensionPage.keyboard.press(`${command}+;`);
+  await expect(sidebar).toBeHidden();
+
+  await extensionPage.evaluate(() => {
+    const editor = document.createElement('textarea');
+    editor.id = 'host-editor';
+    document.body.appendChild(editor);
+  });
+  await extensionPage.locator('#host-editor').focus();
+  await extensionPage.keyboard.press(`${command}+;`);
+  await expect(sidebar).toBeVisible();
+
+  const ignored = await extensionPage.evaluate(() => {
+    const input = document.querySelector<HTMLElement>('#scroll-pro-root')!.shadowRoot!.querySelector<HTMLInputElement>('.scroll-pro-search-input')!;
+    const commandIsMeta = /Mac|iPhone|iPad/.test(navigator.platform);
+    const cases = [
+      { key: 'c' }, { key: 'x' }, { key: 'z' }, { key: 'e' }, { key: 'm' },
+      { key: 'ArrowDown' }, { key: 'ArrowUp' }, { key: 'Tab' }, { key: '?' },
+      { key: ';', repeat: true }, { key: ';', isComposing: true },
+      { key: ';', altKey: true }, { key: ';', shiftKey: true },
+    ];
+    return cases.map((options) => {
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true, composed: true, cancelable: true,
+        [commandIsMeta ? 'metaKey' : 'ctrlKey']: true,
+        ...options,
+      });
+      input.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+  });
+  expect(ignored).toEqual(Array(13).fill(false));
+  await expect(sidebar).toBeVisible();
+
+  await filter.fill('ordinary search');
+  await filter.press('ArrowLeft');
+  await filter.press('Escape');
+  await expect(filter).toHaveValue('ordinary search');
+  await expect(sidebar).toBeVisible();
+  await filter.press('Tab');
+  expect(await filter.evaluate((input) => input.getRootNode() instanceof ShadowRoot &&
+    (input.getRootNode() as ShadowRoot).activeElement !== input)).toBe(true);
+
+  await sidebar.locator('[data-action="copy-format"]').click({ button: 'right' });
+  await expect(extensionPage.getByRole('button', { name: 'Plain text' })).toBeVisible();
+  await extensionPage.keyboard.press('Escape');
+  await expect(extensionPage.getByRole('button', { name: 'Plain text' })).toHaveCount(0);
+
+  await extensionPage.reload();
+  await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
+  await extensionPage.keyboard.press(`${command}+;`);
+  await expect(sidebar).toBeVisible();
+  await extensionPage.keyboard.press(`${command}+;`);
+  await expect(sidebar).toBeHidden();
+
+  await extensionPage.evaluate(() => {
+    history.pushState({}, '', '/');
+    document.body.appendChild(document.createElement('span'));
+  });
+  await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toHaveCount(0);
+  await extensionPage.evaluate(() => {
+    history.pushState({}, '', '/c/fixture-current-turn-unit');
+    document.body.appendChild(document.createElement('span'));
+  });
+  await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
+  await extensionPage.keyboard.press(`${command}+;`);
+  await expect(sidebar).toBeVisible();
 });
 
 test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]', async ({ extensionContext, extensionPage }) => {

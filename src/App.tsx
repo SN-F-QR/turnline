@@ -3,6 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { useChatTurns } from './hooks/useChatTurns';
+import { useShortcuts } from './hooks/useShortcuts';
 
 /** Check if the current URL is an active chat page (not settings, home, etc.) */
 function checkIsChatPage(providerName: string): boolean {
@@ -66,23 +67,8 @@ const App = () => {
     if (!showSidebar) setIsSidebarOpen(false);
   }, [showSidebar]);
 
-  // Global keyboard shortcut: Cmd+' to toggle sidebar
-  // Capture phase + stopImmediatePropagation to survive aggressive host pages (Claude.ai)
-  useEffect(() => {
-    if (!showSidebar) return;
-
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "'") {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        setIsSidebarOpen(prev => !prev);
-      }
-    };
-
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, [showSidebar]);
+  const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
+  useShortcuts(showSidebar, toggleSidebar);
 
   return (
     <div className="font-sans text-slate-900">
@@ -94,7 +80,7 @@ const App = () => {
             container={container}
             isOpen={isSidebarOpen}
             isPaused={false}
-            onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+            onToggle={toggleSidebar}
           />
         </ErrorBoundary>
       )}
