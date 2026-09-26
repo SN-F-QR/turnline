@@ -22,7 +22,7 @@ export function useChatTurns(isOpen: boolean) {
     const controller = useRef<AbortController | null>(null);
     const running = useRef<Promise<HistoryResult> | null>(null);
     const navigation = useRef(0);
-    const [history, setHistory] = useState<HistoryResult>({ turns: [], status: 'idle', reason: 'Visible messages only', complete: false });
+    const [history, setHistory] = useState<HistoryResult>({ turns: [], status: 'idle', reason: 'Visible messages only', complete: null });
     const cancelHistory = useCallback(() => { controller.current?.abort(); }, []);
     const discoverHistory = useCallback(() => {
         if (running.current) return running.current;
@@ -30,8 +30,8 @@ export function useChatTurns(isOpen: boolean) {
         const abort = new AbortController();
         controller.current = abort;
         const url = location.href;
-        setHistory(current => ({ ...current, status: 'scanning', reason: 'Discovering chat history…', complete: false }));
-        const promise = discoverChatHistory(direction => readRef.current(direction), abort.signal).catch((): HistoryResult => ({ turns: [], status: 'failed', reason: 'History scan failed', complete: false })).then(result => {
+        setHistory(current => ({ ...current, status: 'scanning', reason: 'Discovering chat history…', complete: null }));
+        const promise = discoverChatHistory(direction => readRef.current(direction), abort.signal).catch((): HistoryResult => ({ turns: [], status: 'failed', reason: 'History scan failed', complete: null })).then(result => {
             if (controller.current === abort && location.href === url) setHistory(result);
             return result;
         }).finally(() => {
@@ -150,7 +150,7 @@ export function useChatTurns(isOpen: boolean) {
                 snapshot = { live: [], turns: [] };
                 dirty = true;
                 mergeDirection = 'newer';
-                setHistory({ turns: [], status: 'idle', reason: 'Visible messages only', complete: false });
+                setHistory({ turns: [], status: 'idle', reason: 'Visible messages only', complete: null });
                 textCache.clear();
                 headingCache.clear();
                 setTurns([]);

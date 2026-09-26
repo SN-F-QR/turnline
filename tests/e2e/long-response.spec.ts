@@ -70,7 +70,7 @@ test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', 
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(5);
-  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   await installOlderLoadOnScroll(extensionPage);
   await extensionPage.locator('.thread-scroll-container').hover();
   await extensionPage.mouse.wheel(0, -2000);
@@ -118,7 +118,7 @@ test('F09 navigation reaches a middle turn that is absent from both virtual wind
   await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
   const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
-  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   const turnKey = await extensionPage.locator('[data-turn-key]').nth(2).getAttribute('data-turn-key');
   const target = sidebar.locator(`[data-block-key="block-gpt-${turnKey}:0:user"]`);
   await extensionPage.evaluate(() => {
@@ -162,7 +162,7 @@ test('F15 L01 outline discovers older turns without manual chat scrolling [P7]',
   await expect(sidebar).toBeVisible();
   await expect(sidebar).toContainText(expected.loaded.newPrompt!);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(6);
-  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   await expect.poll(() => extensionPage.locator('[data-content-search-unit-key]').evaluateAll((nodes, anchor) => {
     const node = nodes.find(el => el.getAttribute('data-content-search-unit-key') === anchor.key)!;
     return Math.abs(node.getBoundingClientRect().top - anchor.top);

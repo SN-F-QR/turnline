@@ -11,7 +11,7 @@ test('F10 reading follows headings independently of focus and never scrolls the 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const expected = await loadScenario(extensionContext, page, 'long-response-l01');
     const sidebar = await open(page);
-    await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await sidebar.getByRole('button', { name: expected.cold.firstHeading!, exact: true }).click();
     await expect(sidebar.locator('[aria-current="location"]')).toHaveCount(1);
     await expect(sidebar.locator('[aria-current="location"]')).toHaveText(expected.cold.firstHeading!);
@@ -41,7 +41,7 @@ test('F10 latest click wins and wheel cancels the running animation', async ({ e
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     const expected = await loadScenario(extensionContext, page, 'long-response-l01');
     const sidebar = await open(page);
-    await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     const first = sidebar.getByRole('button', { name: expected.cold.firstHeading!, exact: true });
     // Choose a reachable interior heading; the sampled virtualization heights
     // can leave the final heading outside the replay's reverse-scroll range.
@@ -66,16 +66,16 @@ test('F15 cancellation restores reading position and export can be retried', asy
     await loadScenario(extensionContext, page, 'long-response-l01');
     const initial = await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop);
     const sidebar = await open(page);
-    await sidebar.getByRole('button', { name: 'Stop', exact: true }).click();
-    await expect(sidebar.getByRole('status')).toContainText('cancelled');
+    await sidebar.getByRole('button', { name: 'Stop refreshing history' }).click();
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(initial);
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
     await page.getByRole('button', { name: /^JSON/ }).click();
     let downloads = 0;
     page.on('download', () => downloads++);
     await page.getByRole('button', { name: 'Allow scrolling' }).click();
-    await sidebar.getByRole('button', { name: 'Stop', exact: true }).click();
-    await expect(sidebar.getByRole('status')).toContainText('cancelled');
+    await sidebar.getByRole('button', { name: 'Stop refreshing history' }).click();
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     expect(downloads).toBe(0);
     const download = page.waitForEvent('download');
     await sidebar.locator('[data-action="export-format"]').click();
@@ -83,7 +83,7 @@ test('F15 cancellation restores reading position and export can be retried', asy
     expect(data.turns).toHaveLength(5);
     expect(data.coverage.complete).toBeNull();
     expect(data.coverage.scanStatus).toBe('finished');
-    await expect(sidebar.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+    await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveCount(0);
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(initial);
 });
 
@@ -100,7 +100,7 @@ test('F15 empty content hydrates after scrolling and refreshes shared export dat
     });
     const sidebar = await open(page);
     await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
-    await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     const download = page.waitForEvent('download');
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
     await page.getByRole('button', { name: /^JSON/ }).click();
@@ -118,21 +118,24 @@ test('F15 continued discovery reaches a bounded timeout and clears busy [synthet
         setTimeout(() => clearInterval(timer), 17000);
     });
     const sidebar = await open(page);
-    await expect(sidebar.getByRole('status')).toContainText('History scan timed out', { timeout: 20000 });
-    await expect(sidebar.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-    await expect(sidebar.getByRole('button', { name: 'Scan history', exact: true })).toBeEnabled();
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 20000 });
+    await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveCount(0);
+    await expect(sidebar.getByRole('status')).toContainText('messages discovered');
 });
 
-test('F15 a settled scan and manual rescan finish without an incomplete warning', async ({ extensionContext, extensionPage: page }) => {
+test('F15 settled discovery shows a count and refresh action', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const sidebar = await open(page);
     const status = sidebar.getByRole('status');
-    await expect(status).toContainText('4 messages discovered · Scan finished · No more messages found');
-    await expect(status).not.toContainText('Incomplete');
-    await sidebar.getByRole('button', { name: 'Scan history', exact: true }).click();
-    await expect(status).toContainText('Discovering chat history');
-    await expect(status).toContainText('Scan finished');
-    await expect(status).not.toContainText('Incomplete');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(status).toContainText('4 messages discovered');
+    await expect(status).not.toContainText('Scan finished');
+    await expect(status).not.toContainText('No more messages found');
+    await sidebar.getByRole('button', { name: 'Refresh history' }).click();
+    await expect(status).toContainText('Refreshing…');
+    await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveText('');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(status).toContainText('4 messages discovered');
 
     const download = page.waitForEvent('download');
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
@@ -144,7 +147,7 @@ test('F15 a settled scan and manual rescan finish without an incomplete warning'
     expect(data.coverage.description).not.toContain('Incomplete');
 });
 
-test('F15 missing content remains incomplete until a successful rescan [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
+test('F15 missing content can be refreshed without a misleading completeness warning [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const original = await page.locator('[data-markdown-text-style]').first().evaluate(content => {
         const html = content.innerHTML;
@@ -154,10 +157,11 @@ test('F15 missing content remains incomplete until a successful rescan [syntheti
         return html;
     });
     const sidebar = await open(page);
-    await expect(sidebar.getByRole('status')).toContainText('Incomplete: Some discovered content did not load');
-    await expect(sidebar.getByRole('status')).not.toContainText('Scan finished');
-    await page.locator('[data-markdown-text-style]').first().evaluate((content, html) => { content.innerHTML = html; }, original);
-    await sidebar.getByRole('button', { name: 'Scan history', exact: true }).click();
-    await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
     await expect(sidebar.getByRole('status')).not.toContainText('Incomplete');
+    await page.locator('[data-markdown-text-style]').first().evaluate((content, html) => { content.innerHTML = html; }, original);
+    await sidebar.getByRole('button', { name: 'Refresh history' }).click();
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
 });

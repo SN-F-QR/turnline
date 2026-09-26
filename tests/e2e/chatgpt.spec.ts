@@ -157,7 +157,7 @@ test('F02 overlapping legacy wrapper does not duplicate a current turn [P4 synth
 test('F02 history keeps one navigable turn when a fallback search key is replaced', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.getByRole('status')).toContainText('Scan finished');
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   await extensionPage.evaluate(() => {
     const root = document.querySelector<HTMLElement>('[data-turn-key]')!;
     root.querySelectorAll<HTMLElement>('[data-content-search-unit-key]').forEach(unit => {

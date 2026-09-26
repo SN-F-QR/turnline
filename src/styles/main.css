@@ -1023,6 +1023,19 @@
   color: var(--text-secondary);
 }
 .scroll-pro-history-status span { flex: 1; }
-.scroll-pro-history-status button { cursor: pointer; text-decoration: underline; flex-shrink: 0; }
+.scroll-pro-history-control {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.scroll-pro-history-control:hover,
+.scroll-pro-history-control:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-item-active);
+}
 .scroll-pro-sidebar-item.is-reading > .scroll-pro-item-body > .scroll-pro-item-title,
 .scroll-pro-subheading.is-reading { color: var(--text-primary); }

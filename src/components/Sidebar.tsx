@@ -1361,8 +1361,12 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     {providerName === 'chatgpt' && <div className="scroll-pro-history-status" role="status">
                         <span>{describeHistory(history, turns.length)}</span>
                         {history.status === 'scanning'
-                            ? <button onClick={cancelHistory}>Stop</button>
-                            : <button onClick={() => void discoverHistory()}>Scan history</button>}
+                            ? <button type="button" className="scroll-pro-history-control" onClick={cancelHistory} aria-label="Stop refreshing history" title="Stop refreshing history">
+                                <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" /></svg>
+                            </button>
+                            : <button type="button" className="scroll-pro-history-control" onClick={() => void discoverHistory()} aria-label="Refresh history" title="Refresh history">
+                                <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.7" /><path d="M20 4v7h-7" /></svg>
+                            </button>}
                     </div>}
                     <div className="scroll-pro-sidebar-list" ref={listRef}>
                         {turns.length === 0 ? (

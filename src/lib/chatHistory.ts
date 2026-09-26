@@ -2,7 +2,7 @@ import type { Turn } from '../types';
 import { cancelScroll, findScrollable } from './scroll';
 
 export type HistoryStatus = 'idle' | 'scanning' | 'finished' | 'partial' | 'cancelled' | 'failed';
-export type HistoryResult = { turns: Turn[]; status: HistoryStatus; reason: string; complete: false | null };
+export type HistoryResult = { turns: Turn[]; status: HistoryStatus; reason: string; complete: null };
 export type HistorySnapshot = { live: Turn[]; turns: Turn[] };
 
 const delay = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => {
@@ -15,18 +15,15 @@ const scrollerFor = (live: Turn[]) => findScrollable(live.find(t => t.element.is
 const topEdge = (el: HTMLElement) => getComputedStyle(el).flexDirection === 'column-reverse' ? -(el.scrollHeight - el.clientHeight) : 0;
 const move = (el: HTMLElement, top: number) => el.scrollTo({ top, behavior: 'instant' });
 
-export function describeHistory(history: Pick<HistoryResult, 'status' | 'reason'>, count: number) {
-    if (history.status === 'scanning') return 'Discovering chat history…';
-    if (history.status === 'finished') return `${count} messages discovered · Scan finished · ${history.reason}`;
-    if (history.status === 'idle') return `${count} messages discovered · ${history.reason}`;
-    return `${count} messages discovered · Incomplete: ${history.reason}`;
+export function describeHistory(history: Pick<HistoryResult, 'status'>, count: number) {
+    return `${count} messages discovered${history.status === 'scanning' ? ' · Refreshing…' : ''}`;
 }
 
 export function getHistoryCoverage(history: HistoryResult, count: number) {
     return {
         complete: history.complete,
         scanStatus: history.status,
-        description: describeHistory(history, count) + (history.status === 'finished' ? '. Full history not verified.' : ''),
+        description: `${count} messages discovered. Full history not verified.`,
     };
 }
 
@@ -45,7 +42,7 @@ export async function discoverChatHistory(read: (direction?: 'older' | 'newer') 
     let status: HistoryStatus = 'partial';
     let reason = 'History scan timed out';
     let snapshot = initial;
-    if (!initial.live.length) return { turns: initial.turns, status: 'failed', reason: 'No chat content is available', complete: false };
+    if (!initial.live.length) return { turns: initial.turns, status: 'failed', reason: 'No chat content is available', complete: null };
     const active = () => !signal.aborted && location.href === url;
     try {
         let quietSince = performance.now();
@@ -130,5 +127,5 @@ export async function discoverChatHistory(read: (direction?: 'older' | 'newer') 
         }
     }
     if (!active()) { status = 'cancelled'; reason = 'History scan cancelled'; }
-    return { turns: location.href === url ? read().turns : snapshot.turns, status, reason, complete: status === 'finished' ? null : false };
+    return { turns: location.href === url ? read().turns : snapshot.turns, status, reason, complete: null };
 }

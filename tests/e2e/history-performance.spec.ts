@@ -10,7 +10,7 @@ test('F15 loaded long conversation: scan work is bounded [performance sample]', 
     const before = await session.send('Performance.getMetrics');
     const started = Date.now();
     await toggle.click();
-    await expect(page.getByRole('complementary').getByRole('status')).toContainText('Scan finished');
+    await expect(page.getByRole('complementary').getByRole('button', { name: 'Refresh history' })).toBeVisible();
     const after = await session.send('Performance.getMetrics');
     const metric = (values: typeof before, name: string) => values.metrics.find(item => item.name === name)!.value;
     const sample = {
@@ -40,7 +40,7 @@ test('F15 layout and unrelated DOM churn do not keep a loaded chat scanning [syn
         setTimeout(() => clearInterval(timer), 8000);
     });
     await page.getByRole('button', { name: 'Toggle outline' }).click();
-    await expect(page.getByRole('complementary').getByRole('status')).toContainText('Scan finished', { timeout: 3500 });
+    await expect(page.getByRole('complementary').getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 3500 });
 });
 
 
@@ -53,7 +53,7 @@ test('F15 streaming an existing response does not prolong history discovery [syn
     });
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     const sidebar = page.getByRole('complementary');
-    await expect(sidebar.getByRole('status')).toContainText('Scan finished', { timeout: 3500 });
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 3500 });
     // Normal turn observation continues after history discovery has finished.
     await sidebar.getByPlaceholder('Filter…').fill('more');
     await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
@@ -63,10 +63,10 @@ test('F15 manual scrolling stops discovery without pulling the reader back', asy
     await loadScenario(extensionContext, page, 'long-response-l01');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     const status = page.getByRole('complementary').getByRole('status');
-    await expect(status).toContainText('Discovering');
+    await expect(status).toContainText('Refreshing');
     await page.locator('.thread-scroll-container').hover();
     await page.mouse.wheel(0, 400);
-    await expect(status).toContainText('cancelled');
+    await expect(page.getByRole('complementary').getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await page.waitForTimeout(100);
     const position = await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop);
     await page.waitForTimeout(600); // No later probe or restoration may override user input.
