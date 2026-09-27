@@ -69,7 +69,11 @@ export const chatgpt: Provider = {
                     const id = `gpt-${turnKey}${unitSlot}`;
                     if (seenIds.has(id)) continue;
                     seenIds.add(id);
-                    turns.push(makeTurn(unit, content, role, id, `${turnKey}${unitSlot}`));
+                    // Optimistic submissions use a temporary root key until the server
+                    // assigns the real turn. Show them live, but do not retain them
+                    // as historical messages once their DOM node/key disappears.
+                    const turnId = turnKey === 'pending-chatgpt-submit' ? undefined : `${turnKey}${unitSlot}`;
+                    turns.push({ ...makeTurn(unit, content, role, id, turnId), sourceTurnKey: turnKey });
                     found = true;
                 }
                 if (found) {

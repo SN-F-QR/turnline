@@ -9,6 +9,7 @@ export interface Heading {
 export interface Turn {
     id: string; // Internal ID (e.g., "gpt-0")
     turnId?: string; // Provider-specific stable ID (e.g., ChatGPT's data-turn-id)
+    sourceTurnKey?: string; // ChatGPT DOM turn containing the current set of search units
     role: 'user' | 'assistant';
     element: HTMLElement;
     text: string;

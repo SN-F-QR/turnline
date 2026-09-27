@@ -234,6 +234,74 @@ test('F02 history keeps one navigable turn when a fallback search key is replace
   })).toBe(true);
 });
 
+for (const remount of [false, true]) {
+  test(`F06 streamed answer reindexed after search stays under its prompt (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
+    await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+    const sidebar = await openOutline(extensionPage);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await extensionPage.evaluate(() => {
+      const root = document.createElement('div');
+      root.setAttribute('data-turn-key', 'streamed-turn');
+      root.innerHTML = `<div data-content-search-unit-key="fallback-turn-2:0:user"><div data-user-message-bubble>Compare imaginary planets</div></div>
+        <div data-content-search-unit-key="fallback-turn-2:1:assistant"><div data-markdown-text-style="assistant-message"><h2>Planet comparison</h2><p>Initial text before search.</p></div></div>`;
+      document.querySelector('[data-turn-key]')!.parentElement!.append(root);
+    });
+    await expect(sidebar.getByRole('button', { name: 'Planet comparison', exact: true })).toHaveCount(1);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(3);
+    await extensionPage.evaluate((remount) => {
+      const unit = document.querySelector('[data-content-search-unit-key="fallback-turn-2:1:assistant"]')!;
+      const updated = remount ? unit.cloneNode(true) as HTMLElement : unit;
+      updated.setAttribute('data-content-search-unit-key', 'fallback-turn-2:2:assistant');
+      updated.querySelector('[data-markdown-text-style]')!.insertAdjacentHTML('beforeend', '<h2>Search findings</h2><p>Remaining text after search.</p>');
+      if (remount) unit.replaceWith(updated);
+    }, remount);
+    const exchange = sidebar.locator('[data-block-key]').filter({ hasText: 'Compare imaginary planets' });
+    await expect(exchange.getByRole('button', { name: 'Search findings', exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'Planet comparison', exact: true })).toHaveCount(1);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(3);
+    await exchange.getByRole('button', { name: 'Search findings', exact: true }).click();
+    await expect.poll(() => extensionPage.getByRole('heading', { name: 'Search findings' }).evaluate(heading => {
+      const target = heading.getBoundingClientRect();
+      const scroller = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
+      return target.top >= scroller.top && target.top < scroller.bottom;
+    })).toBe(true);
+  });
+}
+
+for (const remount of [false, true]) {
+  test(`F06 pending prompt is retired when submission resolves (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
+    await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+    const sidebar = await openOutline(extensionPage);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await extensionPage.evaluate(() => {
+      const root = document.createElement('div');
+      root.setAttribute('data-turn-key', 'pending-chatgpt-submit');
+      root.innerHTML = '<div data-content-search-unit-key="fallback-turn-2:0:user"><div data-user-message-bubble>Compare imaginary planets</div></div>';
+      document.querySelector('[data-turn-key]')!.parentElement!.append(root);
+    });
+    await expect(sidebar.locator('.scroll-pro-item-title').filter({ hasText: 'Compare imaginary planets' })).toHaveCount(1);
+    await extensionPage.evaluate((remount) => {
+      const pending = document.querySelector('[data-turn-key="pending-chatgpt-submit"]')!;
+      const resolved = remount ? pending.cloneNode(true) as HTMLElement : pending;
+      resolved.setAttribute('data-turn-key', 'resolved-submission');
+      resolved.insertAdjacentHTML('beforeend', '<div data-content-search-unit-key="fallback-turn-2:2:assistant"><div data-markdown-text-style="assistant-message"><h2>Submitted answer</h2></div></div>');
+      if (remount) pending.replaceWith(resolved);
+    }, remount);
+    await expect(sidebar.getByRole('button', { name: 'Submitted answer', exact: true })).toBeVisible();
+    await expect(sidebar.locator('.scroll-pro-item-title').filter({ hasText: 'Compare imaginary planets' })).toHaveCount(1);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(3);
+    // A genuinely repeated prompt with its own stable turn key must survive.
+    await extensionPage.evaluate(() => {
+      const original = document.querySelector('[data-turn-key="resolved-submission"]')!;
+      const repeated = original.cloneNode(true) as HTMLElement;
+      repeated.setAttribute('data-turn-key', 'another-submission');
+      original.after(repeated);
+    });
+    await expect(sidebar.locator('.scroll-pro-item-title').filter({ hasText: 'Compare imaginary planets' })).toHaveCount(2);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(4);
+  });
+}
+
 test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
