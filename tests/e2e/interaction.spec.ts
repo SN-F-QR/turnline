@@ -7,6 +7,27 @@ async function open(page: import('@playwright/test').Page) {
     return page.getByRole('complementary', { name: 'Scroll Pro outline' });
 }
 
+test('reading follows a short final section at the bottom without changing the first prompt alignment', async ({ extensionContext, extensionPage: page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await loadScenario(extensionContext, page, 'current-turn-unit');
+    const sidebar = await open(page);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    const blocks = sidebar.locator('[data-block-key]');
+
+    await page.locator('.thread-scroll-container').evaluate(scroller => { scroller.scrollTop = 0; });
+    await expect(blocks.last().locator('[aria-current="location"]')).toHaveCount(1);
+
+    await sidebar.getByRole('button', { name: 'Prompts', exact: true }).click();
+    await expect(blocks.last()).toHaveAttribute('aria-current', 'location');
+    await blocks.first().click();
+    await expect(blocks.first()).toHaveAttribute('aria-current', 'location');
+    await expect.poll(() => page.locator('[data-user-message-bubble]').first().evaluate(node => {
+        const viewport = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
+        const offset = node.getBoundingClientRect().top - viewport.top;
+        return offset >= 0 && offset < 50;
+    })).toBe(true);
+});
+
 test('F10 reading follows headings independently of focus and never scrolls the host', async ({ extensionContext, extensionPage: page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const expected = await loadScenario(extensionContext, page, 'long-response-l01');

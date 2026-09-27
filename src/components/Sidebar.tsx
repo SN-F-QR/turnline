@@ -773,15 +773,26 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             frame = 0;
             const scroller = findScrollable(container);
             const viewport = scroller === document.scrollingElement ? { top: 0, bottom: innerHeight } : scroller.getBoundingClientRect();
-            const line = Math.max(0, viewport.top) + 25;
+            let line = Math.max(0, viewport.top) + 25;
             const live = turns.filter(turn => turn.element.isConnected && turn.element.getClientRects().length);
-            const turn = live.find(item => {
+            let turn = live.find(item => {
                 const rect = item.element.getBoundingClientRect();
                 return rect.top <= line && rect.bottom > line;
             }) || live.find(item => {
                 const rect = item.element.getBoundingClientRect();
                 return rect.top >= line && rect.top < Math.min(innerHeight, viewport.bottom);
             });
+            const range = scroller.scrollHeight - scroller.clientHeight;
+            const reversed = getComputedStyle(scroller).flexDirection === 'column-reverse';
+            const atBottom = range > 2 && (reversed ? scroller.scrollTop >= -2 : scroller.scrollTop >= range - 2);
+            const last = live[live.length - 1];
+            if (atBottom && last) {
+                const rect = last.element.getBoundingClientRect();
+                if (rect.top < viewport.bottom && rect.bottom > viewport.top) {
+                    turn = last;
+                    line = Math.min(rect.bottom, viewport.bottom) - 1;
+                }
+            }
             const block = filteredBlocks.find(item => item.prompt?.id === turn?.id || item.answer?.id === turn?.id);
             let key = block?.key || null;
             if (block && turn?.id === block.answer?.id && viewLevel === 2 && !collapsedBlocks.has(block.key)) {
