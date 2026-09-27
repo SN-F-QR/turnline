@@ -133,6 +133,10 @@ test('F09 navigation reaches a middle turn that is absent from both virtual wind
       const range = scroller.scrollHeight - scroller.clientHeight;
       const position = range ? -scroller.scrollTop / range : 0;
       const active = position < 0.25 ? 4 : position > 0.75 ? 0 : 2;
+      // This coarse three-window fixture only models the search phase. Once
+      // the middle window is found, leave it mounted so the component can
+      // perform precise element alignment using the real DOM geometry.
+      if (active === 2) scroller.removeEventListener('scroll', update);
       slots.forEach(({ root, placeholder }, index) => {
         if (index === active && placeholder.isConnected) placeholder.replaceWith(root);
         if (index !== active && root.isConnected) root.replaceWith(placeholder);
