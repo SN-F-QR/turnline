@@ -55,7 +55,12 @@ export function useChatTurns(isOpen: boolean) {
             const snapshot = readRef.current();
             const turn = snapshot.live.find(item => item.id === id);
             if (turn) {
-                scrollToElement(headingIndex === undefined ? turn.element : turn.headings[headingIndex]?.element || turn.element);
+                const resolveTarget = () => {
+                    if (request !== navigation.current || location.href !== url) return undefined;
+                    const current = readRef.current().live.find(item => item.id === id);
+                    return current && (headingIndex === undefined ? current.element : current.headings[headingIndex]?.element || current.element);
+                };
+                scrollToElement(resolveTarget(), resolveTarget);
                 return true;
             }
             if (performance.now() > until) break;

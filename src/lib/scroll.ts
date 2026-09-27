@@ -1,6 +1,8 @@
 // Nudge target down slightly so it renders at the top of the visible area (avoids sticky headers)
 const SCROLL_OFFSET = 24;
 const SCROLL_DURATION = 700;
+// Follow delayed rendering after arrival, but never keep controlling the page indefinitely.
+const SCROLL_SETTLE_DURATION = 1200;
 
 const findScrollContainer = (node: HTMLElement): HTMLElement | Window => {
   let scrollContainer: HTMLElement | Window = window;
@@ -54,9 +56,9 @@ export const findScrollable = (start: HTMLElement | null): HTMLElement => {
   return (document.scrollingElement || document.documentElement) as HTMLElement;
 };
 
-const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: number, node: HTMLElement) => {
+const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: number, node: HTMLElement, resolveTarget?: () => HTMLElement | undefined) => {
   cancelScroll();
-  const containerIsWindow = scrollContainer === window;
+  let containerIsWindow = scrollContainer === window;
   const getScroll = () => (containerIsWindow ? window.scrollY : (scrollContainer as HTMLElement).scrollTop);
   const setScroll = (value: number) => {
     if (containerIsWindow) {
@@ -66,17 +68,12 @@ const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: num
     }
   };
 
-  if (prefersReducedMotion()) {
-    setScroll(targetPosition);
-    return;
-  }
-
+  const duration = prefersReducedMotion() ? 0 : SCROLL_DURATION;
   const start = getScroll();
-  const distance = targetPosition - start;
-  if (Math.abs(distance) < 1) {
-    setScroll(targetPosition);
-    return;
-  }
+  let lastTarget = targetPosition;
+  // Reduced-motion navigation must position immediately, including callers
+  // that have just materialized a virtualized turn.
+  if (duration === 0) setScroll(targetPosition);
 
   const cancelEvents: (keyof DocumentEventMap)[] = ['wheel', 'touchstart', 'mousedown', 'keydown'];
   let canceled = false;
@@ -101,19 +98,25 @@ const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: num
 
   const step = () => {
     if (canceled) return;
-    if (!node.isConnected) { cancel(); return; }
     const now = performance.now();
     const elapsed = now - startTime;
-    const t = Math.min(1, elapsed / SCROLL_DURATION);
+    const replacement = resolveTarget?.();
+    if (replacement?.isConnected && replacement !== node) {
+      node = replacement;
+      scrollContainer = findScrollContainer(node);
+      containerIsWindow = scrollContainer === window;
+    }
+    const t = duration ? Math.min(1, elapsed / duration) : 1;
     const eased = easeOutCubic(t);
-    const currentTarget = computeTargetPosition(node, scrollContainer, containerIsWindow);
-    setScroll(start + (currentTarget - start) * eased);
+    // Keep moving toward the last known position while virtualization remounts
+    // the target. A detached node has no usable bounding rectangle.
+    if (node.isConnected) lastTarget = computeTargetPosition(node, scrollContainer, containerIsWindow);
+    const next = start + (lastTarget - start) * eased;
+    if (Math.abs(getScroll() - next) > 1) setScroll(next);
 
-    if (t < 1) {
+    if (elapsed < duration + SCROLL_SETTLE_DURATION) {
       frame = requestAnimationFrame(step);
     } else {
-      // Snap to target in case layout shifted during animation
-      setScroll(computeTargetPosition(node, scrollContainer, containerIsWindow));
       cleanup();
     }
   };
@@ -121,12 +124,12 @@ const smoothScroll = (scrollContainer: HTMLElement | Window, targetPosition: num
   frame = requestAnimationFrame(step);
 };
 
-const scrollNodeIntoViewWithOffset = (node: HTMLElement) => {
+const scrollNodeIntoViewWithOffset = (node: HTMLElement, resolveTarget?: () => HTMLElement | undefined) => {
   const scrollContainer = findScrollContainer(node);
   const containerIsWindow = scrollContainer === window;
   const targetPosition = computeTargetPosition(node, scrollContainer, containerIsWindow);
 
-  smoothScroll(scrollContainer, targetPosition, node);
+  smoothScroll(scrollContainer, targetPosition, node, resolveTarget);
 
   return { scrollContainer, targetPosition };
 };
@@ -143,7 +146,7 @@ export const highlightNode = (node: HTMLElement) => {
   }, 1500);
 };
 
-export const scrollToElement = (element: HTMLElement | undefined) => {
+export const scrollToElement = (element: HTMLElement | undefined, resolveTarget?: () => HTMLElement | undefined) => {
   if (!element?.isConnected) return;
-  scrollNodeIntoViewWithOffset(element);
+  scrollNodeIntoViewWithOffset(element, resolveTarget);
 };

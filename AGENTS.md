@@ -15,6 +15,16 @@ npm run typecheck  # TypeScript type checking
 
 Load `dist/` as an unpacked extension in Chrome (`chrome://extensions` with Developer Mode enabled).
 
+### Browser tests
+
+Playwright launches the bundled `Chrome for Testing` with the built extension. On macOS it must be run outside the restricted filesystem/process sandbox. A sandboxed launch exits with `SIGABRT`/`EPERM` and may show the user a misleading “Chrome for Testing quit unexpectedly” notification.
+
+- Run non-browser checks (`npm run typecheck`, `npm run typecheck:tests`, and `npm run test:unit`) normally.
+- Before browser tests, build the extension with `npm run build`, or use `npm run test:e2e`, which builds it automatically.
+- For `npm run test:e2e`, `npx playwright test`, and focused Playwright commands, request the required elevated/sandbox-exempt execution on the first attempt. Do not first probe by launching Playwright inside the restricted sandbox.
+- Do not retry a sandboxed browser launch after `SIGABRT`, `EPERM`, or `Target page, context or browser has been closed`; rerun the same command once with the correct execution permission.
+- Prefer focused specs while iterating, for example: `npx playwright test tests/e2e/scroll-recovery.spec.ts`. Run the broader suite after the focused tests pass when the change warrants it.
+
 ## Architecture
 
 ### Entry points
