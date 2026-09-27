@@ -14,8 +14,9 @@ import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
-import { useOutlineSettings } from '../hooks/useOutlineSettings';
 import { getHeadingLevel, getOutlineWidth } from '../lib/outlineSettings';
+import type { OutlineSettingsController } from '../hooks/useOutlineSettings';
+import SettingsPanel from './SettingsPanel';
 import DOMPurify from 'dompurify';
 const CONTEXT_HINT_KEY = 'scroll-pro-context-hint-seen';
 const LINE_CLAMP_KEY = 'scroll-pro-line-clamp';
@@ -225,11 +226,12 @@ type SidebarProps = {
     isOpen: boolean;
     isPaused: boolean;
     onToggle: () => void;
+    settings: OutlineSettingsController;
 };
 
-export default function Sidebar({ turns, history, discoverHistory, cancelHistory, navigateToTurn, providerName, container, isOpen, isPaused, onToggle }: SidebarProps) {
+export default function Sidebar({ turns, history, discoverHistory, cancelHistory, navigateToTurn, providerName, container, isOpen, isPaused, onToggle, settings }: SidebarProps) {
     const [viewLevel, setViewLevel] = useState<1 | 2>(2); // 1=Prompts, 2=All
-    const { depth, width, updateDepth, updateWidth } = useOutlineSettings();
+    const { depth, width } = settings;
     const widthRef = useRef(width);
     widthRef.current = width;
     const [showSettings, setShowSettings] = useState(false);
@@ -242,6 +244,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     const [activeKey, setActiveKey] = useState<string | null>(null);
     const pointerInSidebar = useRef(false);
     const listRef = useRef<HTMLDivElement | null>(null);
+    const outlineScrollTopRef = useRef(0);
     const [focusedIndex, setFocusedIndex] = useState<number>(-1);
     const [exportFormat, setExportFormat] = useState<'md' | 'pdf' | 'txt' | 'json'>('md');
     const captureInProgressRef = useRef(false);
@@ -267,6 +270,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
     const sidebarShellRef = useRef<HTMLDivElement | null>(null);
     const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
+    const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
     const sidebarPositionRef = useRef<SidebarPosition>(sidebarPosition);
     const dragPositionRef = useRef<SidebarPosition | null>(null);
     const dragOpenDirectionRef = useRef<SidebarOpenDirection | null>(null);
@@ -429,6 +433,27 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         }
         onToggle();
     }, [onToggle]);
+
+    const openSettings = useCallback(() => {
+        outlineScrollTopRef.current = listRef.current?.scrollTop ?? outlineScrollTopRef.current;
+        setContextMenu(null);
+        setExportFormatMenu(null);
+        setCopyFormatMenu(null);
+        setShowSettings(true);
+    }, []);
+
+    const closeSettings = useCallback(() => {
+        setShowSettings(false);
+        requestAnimationFrame(() => settingsButtonRef.current?.focus());
+    }, []);
+
+    const assignListRef = useCallback((node: HTMLDivElement | null) => {
+        listRef.current = node;
+        if (!node) return;
+        requestAnimationFrame(() => {
+            if (listRef.current === node) node.scrollTop = outlineScrollTopRef.current;
+        });
+    }, []);
 
     useEffect(() => {
         sidebarPositionRef.current = sidebarPosition;
@@ -876,7 +901,10 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         if (!isOpen && copyFormatMenu) {
             setCopyFormatMenu(null);
         }
-    }, [isOpen, contextMenu, exportFormatMenu, copyFormatMenu]);
+        if (!isOpen && showSettings) {
+            setShowSettings(false);
+        }
+    }, [isOpen, contextMenu, exportFormatMenu, copyFormatMenu, showSettings]);
 
     useEffect(() => {
         const menu = contextMenuRef.current || exportFormatMenuRef.current || copyFormatMenuRef.current;
@@ -1275,6 +1303,13 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     onMouseLeave={() => { pointerInSidebar.current = false; }}
 
                 >
+                    {showSettings ? (
+                        <SettingsPanel
+                            settings={settings}
+                            onBack={closeSettings}
+                        />
+                    ) : (
+                        <>
                     <div className="scroll-pro-sidebar-head">
                         <div className="scroll-pro-sidebar-row">
                             <div className="scroll-pro-tab-group" role="group" aria-label="Outline filter">
@@ -1295,7 +1330,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                 </button>
                             </div>
                             <div className="scroll-pro-actions" role="group" aria-label="Chat actions">
-                                <button className={`scroll-pro-action-btn ${showSettings ? 'is-active' : ''}`} aria-label="Outline settings" aria-expanded={showSettings} onClick={() => setShowSettings(value => !value)}>
+                                <button ref={settingsButtonRef} className="scroll-pro-action-btn" aria-label="Outline settings" aria-expanded="false" onClick={openSettings}>
                                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>
                                 </button>
                                 <button
@@ -1340,27 +1375,6 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                             </div>
                         </div>
 
-                        {showSettings && (
-                            <div className="scroll-pro-outline-settings">
-                                <div className="scroll-pro-setting-row">
-                                    <span className="scroll-pro-setting-label">Heading depth</span>
-                                    <div className="scroll-pro-setting-select">
-                                        <select aria-label="Heading depth" value={depth} onChange={e => updateDepth(Number(e.target.value))}>
-                                            {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={level}>H1–H{level}</option>)}
-                                        </select>
-                                        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                                    </div>
-                                </div>
-                                <div className="scroll-pro-setting-row">
-                                    <span className="scroll-pro-setting-label">Width</span>
-                                    <div className="scroll-pro-width-options" role="group" aria-label="Outline width">
-                                        {[{ label: 'Narrow', value: 320 }, { label: 'Standard', value: 420 }, { label: 'Wide', value: 640 }].map(option => (
-                                            <button key={option.value} type="button" aria-pressed={width === option.value} onClick={() => updateWidth(option.value)}>{option.label}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                         <div className="scroll-pro-search">
                             <svg className="scroll-pro-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                             <input
@@ -1370,6 +1384,16 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                 onChange={e => setSearch(e.target.value)}
                                 className="scroll-pro-search-input"
                             />
+                            {search && (
+                                <button
+                                    type="button"
+                                    className="scroll-pro-search-clear"
+                                    aria-label="Clear filter"
+                                    onClick={() => setSearch('')}
+                                >
+                                    <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -1383,7 +1407,11 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                 <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.7" /><path d="M20 4v7h-7" /></svg>
                             </button>}
                     </div>}
-                    <div className="scroll-pro-sidebar-list" ref={listRef}>
+                    <div
+                        className="scroll-pro-sidebar-list"
+                        ref={assignListRef}
+                        onScroll={event => { outlineScrollTopRef.current = event.currentTarget.scrollTop; }}
+                    >
                         {turns.length === 0 ? (
                             <div className="scroll-pro-empty">
                                 <div className="scroll-pro-empty-card">
@@ -1546,6 +1574,8 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                             <div className="scroll-pro-empty">No items found</div>
                         )}
                     </div>
+                        </>
+                    )}
                 </div>
             )}
             {contextMenu && (

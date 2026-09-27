@@ -49,7 +49,7 @@ After checking the oldest available messages without finding new messages or unr
 
 **Drag** — Reposition the toggle button anywhere on screen.
 
-**Outline settings** — Open the gear button to choose heading depth 1–6 (default 4) and three width presets: Narrow (320px), Standard (420px, default), and Wide (640px). Preferences persist locally and synchronize between tabs. Narrow windows temporarily reduce the displayed width. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
+**Outline settings** — Open the gear button for a dedicated settings view. Choose one of six theme colors (Blue, Green, Yellow, Pink, Orange, or Purple) or enter a custom hex theme color; choose System, Light, or Dark appearance; set an optional custom hex background; enter an outline text size from 10px to 24px; choose heading depth 1–6 (default 4); and select Narrow (320px), Standard (420px, default), or Wide (640px) width. Custom backgrounds automatically use readable light or dark text. Press Escape or use the back button to return to the outline. Preferences persist locally and synchronize between tabs. Narrow windows temporarily reduce the displayed width. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
 
 ## Keyboard shortcuts
 

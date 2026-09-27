@@ -54,6 +54,7 @@ test('F10 reading follows headings independently of focus and never scrolls the 
     await sidebar.getByRole('button', { name: 'All', exact: true }).click();
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
     await sidebar.getByLabel('Heading depth').selectOption('1');
+    await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await expect(sidebar.locator('[aria-current="location"]')).toHaveCount(1);
     await expect(sidebar.locator('[data-block-key][aria-current="location"], [data-outline-level="1"][aria-current="location"]')).toHaveCount(1);
 });

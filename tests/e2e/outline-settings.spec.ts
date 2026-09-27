@@ -24,6 +24,7 @@ test('F12 depth filtering preserves search, no-heading fallback, selection and e
     await sidebar.getByRole('button', { name: 'Orbit Beta', exact: true }).click();
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
     await sidebar.getByLabel('Heading depth').selectOption('1');
+    await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
     await expect(sidebar.locator('[data-block-key]').first().locator('.scroll-pro-subheading')).toHaveCount(0);
     await expect(sidebar.locator('[data-block-key]').last().locator('.scroll-pro-subheading')).toHaveCount(1);
@@ -33,11 +34,15 @@ test('F12 depth filtering preserves search, no-heading fallback, selection and e
     await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
     await sidebar.getByPlaceholder('Filter…').fill('');
     for (const depth of ['4', '6']) {
+        await sidebar.getByRole('button', { name: 'Outline settings' }).click();
         await sidebar.getByLabel('Heading depth').selectOption(depth);
+        await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(2);
     }
     // Existing export flow serializes the original DOM, including hidden H2/H3.
+    await sidebar.getByRole('button', { name: 'Outline settings' }).click();
     await sidebar.getByLabel('Heading depth').selectOption('1');
+    await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
     await page.getByRole('button', { name: /JSON/ }).click();
     const downloadPromise = page.waitForEvent('download');
@@ -53,27 +58,138 @@ test('F12 depth filtering preserves search, no-heading fallback, selection and e
     expect(exported.turns[0].response).toContain('### Orbit Beta');
 });
 
+test('F12 settings view preserves outline state and applies appearance preferences', async ({ extensionContext, extensionPage: page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await loadScenario(extensionContext, page, 'long-response-l01');
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const sidebar = page.locator(sidebarSelector);
+    const list = sidebar.locator('.scroll-pro-sidebar-list');
+    const firstItem = sidebar.locator('[data-block-key]').first();
+    await sidebar.getByPlaceholder('Filter…').fill('Chapter');
+    await firstItem.locator('.scroll-pro-item-title').click();
+    await expect(firstItem).toHaveAttribute('aria-selected', 'true');
+    await list.evaluate(element => { element.scrollTop = 120; });
+    const savedScroll = await list.evaluate(element => element.scrollTop);
+    const toolbarFontSize = await sidebar.getByRole('button', { name: 'All', exact: true }).evaluate(element => getComputedStyle(element).fontSize);
+
+    const settingsButton = sidebar.getByRole('button', { name: 'Outline settings' });
+    await expect(sidebar.locator('.scroll-pro-history-status')).toBeVisible();
+    await settingsButton.click();
+    await expect(sidebar.getByRole('button', { name: 'Back to outline' })).toBeFocused();
+    await expect(sidebar.getByRole('heading', { name: 'Settings' })).toHaveCSS('font-size', toolbarFontSize);
+    await expect(sidebar.getByPlaceholder('Filter…')).toHaveCount(0);
+    await expect(sidebar.locator('.scroll-pro-history-status')).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+
+    const themeColors = [
+        ['Blue', '#3566f0'],
+        ['Green', '#19b79e'],
+        ['Yellow', '#fdcd53'],
+        ['Pink', '#fb70ab'],
+        ['Orange', '#ff8671'],
+        ['Purple', '#ab5eff'],
+    ] as const;
+    for (const [color, hex] of themeColors) {
+        await sidebar.getByRole('button', { name: color, exact: true }).click();
+        await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-accent', color.toLowerCase());
+        await expect.poll(() => page.locator('.scroll-pro-app-root').evaluate(element => getComputedStyle(element).getPropertyValue('--accent').trim())).toBe(hex);
+    }
+    await sidebar.getByLabel('Custom theme color hex').fill('#123456');
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-custom-accent', 'true');
+    await expect.poll(() => page.locator('.scroll-pro-app-root').evaluate(element => getComputedStyle(element).getPropertyValue('--accent').trim())).toBe('#123456');
+    await expect(sidebar.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await sidebar.getByLabel('Custom theme color hex').fill('');
+    await expect(page.locator('.scroll-pro-app-root')).not.toHaveAttribute('data-custom-accent', 'true');
+    await expect(sidebar.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await sidebar.getByLabel('Custom theme color hex').fill('#654321');
+    await sidebar.getByRole('button', { name: 'Blue', exact: true }).click();
+    await expect(sidebar.getByLabel('Custom theme color hex')).toHaveValue('');
+
+    await sidebar.getByLabel('Background color hex').fill('#FEF3C7');
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-custom-background-tone', 'light');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(254, 243, 199)');
+    await expect(sidebar).toHaveCSS('color', 'rgb(21, 23, 28)');
+
+    // Verify dark mode overrides custom background without dropping the setting
+    await sidebar.getByRole('button', { name: 'Dark', exact: true }).click();
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('.scroll-pro-app-root')).not.toHaveAttribute('data-custom-background-tone');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(5, 6, 8)');
+    await expect(sidebar.getByLabel('Background color hex')).toHaveValue('#FEF3C7');
+
+    // Switching back to Light restores the custom background
+    await sidebar.getByRole('button', { name: 'Light', exact: true }).click();
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-custom-background-tone', 'light');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(254, 243, 199)');
+    await expect(sidebar.getByLabel('Background color hex')).toHaveValue('#FEF3C7');
+
+    await sidebar.getByLabel('Background color hex').fill('');
+    await expect(page.locator('.scroll-pro-app-root')).not.toHaveAttribute('data-custom-background-tone');
+    await sidebar.getByRole('button', { name: 'Light', exact: true }).click();
+    await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 247, 244)');
+    await sidebar.getByRole('button', { name: 'System', exact: true }).click();
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(5, 6, 8)');
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 247, 244)');
+    await sidebar.getByRole('button', { name: 'Dark', exact: true }).click();
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(5, 6, 8)');
+    await sidebar.getByLabel('Outline text size').fill('16');
+
+    await page.keyboard.press('Escape');
+    await expect(settingsButton).toBeFocused();
+    await expect(sidebar.locator('.scroll-pro-history-status')).toBeVisible();
+    await expect(sidebar.getByPlaceholder('Filter…')).toHaveValue('Chapter');
+    await expect(firstItem).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBe(savedScroll);
+    await expect(firstItem.locator('.scroll-pro-item-title')).toHaveCSS('font-size', '16px');
+    await expect(sidebar.getByRole('button', { name: 'All', exact: true })).toHaveCSS('font-size', toolbarFontSize);
+});
+
 test('F12 settings persist across reload and synchronize a second tab', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     await page.getByRole('button', { name: 'Outline settings' }).click();
     await page.getByLabel('Heading depth').selectOption('6');
     await page.getByRole('button', { name: 'Wide', exact: true }).click();
+    await page.getByRole('button', { name: 'Light', exact: true }).click();
+    await page.getByRole('button', { name: 'Purple', exact: true }).click();
+    await page.getByLabel('Outline text size').fill('15');
+    await page.getByLabel('Custom theme color hex').fill('#0EA5E9');
+    await page.getByLabel('Background color hex').fill('#FFF7ED');
     const second = await extensionContext.newPage();
     await second.goto(page.url());
     await second.getByRole('button', { name: 'Toggle outline' }).click();
     await second.getByRole('button', { name: 'Outline settings' }).click();
     await expect(second.getByLabel('Heading depth')).toHaveValue('6');
     await expect(second.getByRole('button', { name: 'Wide', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(second.getByRole('button', { name: 'Light', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(second.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(second.getByLabel('Outline text size')).toHaveValue('15');
+    await expect(second.getByLabel('Custom theme color hex')).toHaveValue('#0EA5E9');
+    await expect(second.getByLabel('Background color hex')).toHaveValue('#FFF7ED');
     await second.getByLabel('Heading depth').selectOption('1');
     await second.getByRole('button', { name: 'Narrow', exact: true }).click();
+    await second.getByRole('button', { name: 'Dark', exact: true }).click();
+    await second.getByLabel('Outline text size').fill('16');
+    await second.getByLabel('Custom theme color hex').fill('#14B8A6');
+    await second.getByLabel('Background color hex').fill('#111827');
     await expect(page.getByLabel('Heading depth')).toHaveValue('1');
     await expect(page.getByRole('button', { name: 'Narrow', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Outline text size')).toHaveValue('16');
+    await expect(page.getByLabel('Custom theme color hex')).toHaveValue('#14B8A6');
+    await expect(page.getByLabel('Background color hex')).toHaveValue('#111827');
     await page.reload();
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     await page.getByRole('button', { name: 'Outline settings' }).click();
     await expect(page.getByLabel('Heading depth')).toHaveValue('1');
     await expect(page.getByRole('button', { name: 'Narrow', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Outline text size')).toHaveValue('16');
+    await expect(page.getByLabel('Custom theme color hex')).toHaveValue('#14B8A6');
+    await expect(page.getByLabel('Background color hex')).toHaveValue('#111827');
     await second.close();
 });
 

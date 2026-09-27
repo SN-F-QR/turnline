@@ -18,10 +18,13 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await expect(sidebar.getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '2');
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
         await sidebar.getByLabel('Heading depth').selectOption('1');
+        await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
+        await sidebar.getByRole('button', { name: 'Outline settings' }).click();
         await sidebar.getByLabel('Heading depth').selectOption('6');
-        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await sidebar.getByRole('button', { name: 'Narrow', exact: true }).click();
+        await sidebar.getByRole('button', { name: 'Back to outline' }).click();
+        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar).toBeVisible();
     });
 }

@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { useChatTurns } from './hooks/useChatTurns';
 import { useShortcuts } from './hooks/useShortcuts';
+import { useOutlineSettings } from './hooks/useOutlineSettings';
+import { getHexColorTone, getOutlineFontSizes } from './lib/outlineSettings';
 
 /** Check if the current URL is an active chat page (not settings, home, etc.) */
 function checkIsChatPage(providerName: string): boolean {
@@ -25,6 +27,7 @@ function checkIsChatPage(providerName: string): boolean {
 
 const App = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const outlineSettings = useOutlineSettings();
   const { turns, provider, container, history, discoverHistory, cancelHistory, navigateToTurn } = useChatTurns(isSidebarOpen);
   const isProviderSupported = !!provider && ['chatgpt', 'claude', 'gemini'].includes(provider.name);
 
@@ -76,9 +79,30 @@ const App = () => {
 
   const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
   useShortcuts(showSidebar, toggleSidebar);
+  const outlineFontSizes = getOutlineFontSizes(outlineSettings.fontSize);
+  const isCustomBackgroundActive = Boolean(outlineSettings.customBackground && outlineSettings.themeMode !== 'dark');
+  const customBackgroundTone = isCustomBackgroundActive ? getHexColorTone(outlineSettings.customBackground!) : undefined;
 
   return (
-    <div className="font-sans text-slate-900">
+    <div
+      className="scroll-pro-app-root font-sans text-slate-900"
+      data-theme={outlineSettings.themeMode}
+      data-accent={outlineSettings.accentPreset}
+      data-custom-accent={outlineSettings.customAccent ? 'true' : undefined}
+      data-custom-background-tone={customBackgroundTone}
+      style={{
+        ['--outline-title-size' as string]: `${outlineFontSizes.title}px`,
+        ['--outline-secondary-size' as string]: `${outlineFontSizes.secondary}px`,
+        ...(outlineSettings.customAccent ? {
+          ['--accent' as string]: outlineSettings.customAccent,
+          ['--accent-soft' as string]: `color-mix(in srgb, ${outlineSettings.customAccent} 16%, transparent)`,
+          ['--accent-highlight' as string]: `color-mix(in srgb, ${outlineSettings.customAccent} 25%, transparent)`,
+        } : {}),
+        ...(isCustomBackgroundActive ? {
+          ['--custom-background' as string]: outlineSettings.customBackground,
+        } : {}),
+      } as CSSProperties}
+    >
       {showSidebar && (
         <ErrorBoundary>
           <Sidebar
@@ -92,6 +116,7 @@ const App = () => {
             isOpen={isSidebarOpen}
             isPaused={false}
             onToggle={toggleSidebar}
+            settings={outlineSettings}
           />
         </ErrorBoundary>
       )}
