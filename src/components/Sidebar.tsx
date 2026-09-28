@@ -1508,7 +1508,14 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                     aria-selected={focusedIndex === focusIdx}
                                 >
                                     <div className="scroll-pro-item-body">
-                                        <div className="scroll-pro-item-header">
+                                        <div
+                                            className="scroll-pro-item-header"
+                                            onClick={() => {
+                                                if (contextMenu) return;
+                                                if (focusIdx >= 0) setFocusedIndex(focusIdx);
+                                                navigate(block.prompt || block.answer);
+                                            }}
+                                        >
                                             {canCollapse ? (
                                                 <button
                                                     type="button"
@@ -1550,11 +1557,6 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                                 type="button"
                                                 className="scroll-pro-item-title"
                                                 onFocus={() => setFocusedIndex(focusIdx)}
-                                                onClick={() => {
-                                                    if (contextMenu) return;
-                                                    if (focusIdx >= 0) setFocusedIndex(focusIdx);
-                                                    navigate(block.prompt || block.answer);
-                                                }}
                                             >
                                                 {block.title || '…'}
                                             </button>

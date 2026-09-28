@@ -787,6 +787,7 @@
   color: var(--text-secondary);
   transition: color 120ms ease, background 120ms ease;
   user-select: none;
+  cursor: pointer;
 }
 
 .scroll-pro-collapse-btn {
@@ -847,7 +848,7 @@
 }
 
 .scroll-pro-item-title {
-  flex: 0 1 auto;
+  flex: 1;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -897,7 +898,7 @@
 }
 
 /* Hover is a quiet, temporary cue; reading position owns the text emphasis. */
-.scroll-pro-item-title:hover,
+.scroll-pro-item-header:hover,
 .scroll-pro-subheading:hover {
   background: var(--hover-overlay);
 }

@@ -17,7 +17,7 @@ async function expectPromptAtTop(page: Page) {
 }
 
 // The sidebar renderer and hit areas are shared by all providers.
-test('card whitespace preserves the reading position while its prompt title navigates', async ({ extensionPage: page }) => {
+test('prompt row whitespace navigates while collapse and card gaps preserve the reading position', async ({ extensionPage: page }) => {
     await page.locator('[data-user-message-bubble]').first().evaluate(element => { element.textContent = 'Short prompt'; });
     const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
     const block = sidebar.locator('[data-block-key]').first();
@@ -27,13 +27,11 @@ test('card whitespace preserves the reading position while its prompt title navi
     const position = await scroller.evaluate(element => { element.scrollTop = 0; return element.scrollTop; });
     const blankPoints = await block.evaluate(element => {
         const card = element.getBoundingClientRect();
-        const header = element.querySelector('.scroll-pro-item-header')!.getBoundingClientRect();
         const headings = element.querySelectorAll('.scroll-pro-subheading');
         const first = headings[0].getBoundingClientRect();
         const second = headings[1].getBoundingClientRect();
         return [
             { x: card.left + 1, y: card.top + 1 },
-            { x: header.right - 12, y: header.top + header.height / 2 },
             { x: first.left + 10, y: (first.bottom + second.top) / 2 },
         ];
     });
@@ -43,7 +41,12 @@ test('card whitespace preserves the reading position while its prompt title navi
         await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         expect(await scroller.evaluate(element => element.scrollTop)).toBe(position);
     }
-    await title.click();
+    await block.getByRole('button', { name: 'Collapse answer outline' }).click();
+    await expect(block.locator('.scroll-pro-subheading')).toHaveCount(0);
+    expect(await scroller.evaluate(element => element.scrollTop)).toBe(position);
+    const header = block.locator('.scroll-pro-item-header');
+    const bounds = (await header.boundingBox())!;
+    await header.click({ position: { x: bounds.width - 1, y: bounds.height / 2 } });
     await expectPromptAtTop(page);
     expect(await scroller.evaluate(element => element.scrollTop)).not.toBe(position);
 });
