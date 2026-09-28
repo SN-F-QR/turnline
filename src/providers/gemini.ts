@@ -1,4 +1,4 @@
-import { Provider, Turn } from '../types';
+import type { Heading, Provider, Turn } from '../types';
 import { serializeNodeToMarkdown } from '../lib/markdownUtil';
 
 export const gemini: Provider = {
@@ -7,14 +7,14 @@ export const gemini: Provider = {
         const host = window.location.hostname.toLowerCase();
         return host === 'gemini.google.com' || host.endsWith('.gemini.google.com');
     },
-    scrollContainerSelector: '.mat-sidenav-content',
+    scrollContainerSelector: 'infinite-scroller.chat-history, .mat-sidenav-content',
     getTurns: (container: HTMLElement): Turn[] => {
         const turns: Turn[] = [];
         const items = Array.from(container.querySelectorAll('user-query, model-response'));
         items.forEach((item, index) => {
             const isUser = item.tagName.toLowerCase() === 'user-query';
             let text = '';
-            let headings: any[] = [];
+            let headings: Heading[] = [];
 
             if (isUser) {
                 // User query text is in div.query-text, but it contains a
@@ -37,11 +37,13 @@ export const gemini: Provider = {
                 const markdown = item.querySelector('message-content .markdown');
                 if (markdown) {
                     text = serializeNodeToMarkdown(markdown) || (markdown as HTMLElement).innerText || '';
-                    headings = Array.from(markdown.querySelectorAll('h1, h2, h3, h4')).map(h => ({
-                        innerText: (h as HTMLElement).innerText,
-                        element: h as HTMLElement,
+                    // Offscreen turns use content-visibility:auto: innerText can
+                    // be empty even though their heading text remains in the DOM.
+                    headings = Array.from(markdown.querySelectorAll<HTMLElement>('h1, h2, h3, h4')).map(h => ({
+                        innerText: h.innerText.trim() || h.textContent?.trim() || '',
+                        element: h,
                         tagName: h.tagName
-                    }));
+                    })).filter(h => h.innerText.length > 0);
                 }
             }
 

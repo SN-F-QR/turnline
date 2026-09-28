@@ -1,0 +1,29 @@
+{
+  "source": "Captured from the user-authorized Gemini test conversation; only its three conversation-container subtrees are retained.",
+  "capturedAt": "2026-09-28",
+  "browserVersion": "Chrome 153.0.0.0",
+  "pageType": "Gemini /app/<anonymized>",
+  "capture": "Chrome DevTools DOM clones with the inspected chat-history-scroll-container and infinite-scroller parent chain.",
+  "sanitization": "Page head, account, sidebar and composer were never captured. Scripts, styles, remote media, decorative SVGs, buttons and comments were removed. Attribute allowlist retains only classes, direction, roles, non-identifying ARIA state and data-path-to-node; all IDs, URLs, event handlers, Angular bindings and tracking metadata were removed.",
+  "layout": "Offline CSS models observed overflow-y:scroll, flex-direction:column and turn-content-visibility content-visibility:auto with contain-intrinsic-size:auto 500px. After styles load, the test scrolls to the bottom and models a content mutation to reparse while earlier headings are skipped.",
+  "observedLayout": {
+    "overflowY": "scroll",
+    "flexDirection": "column",
+    "skippedTurnContentVisibility": "auto",
+    "containIntrinsicSize": "auto 500px"
+  },
+  "observedCounts": {
+    "conversationPairs": 3,
+    "userQueries": 3,
+    "modelResponses": 3,
+    "markdownBodies": 3,
+    "headings": 28,
+    "headingCounts": [
+      3,
+      14,
+      11
+    ]
+  },
+  "reproduction": "The three first-response H3 elements had empty innerText while their textContent still contained complete headings; the sidebar rendered three empty rows.",
+  "limitation": "Static DOM capture and reduced offline layout. Dynamic streaming and node replacement are modeled by tests; generated images and original styles are omitted. The separate live reproduction conversation is not stored."
+}
