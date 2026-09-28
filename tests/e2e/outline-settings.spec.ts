@@ -132,11 +132,11 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await expect(page.locator('.scroll-pro-app-root')).not.toHaveAttribute('data-custom-background-tone');
     await sidebar.getByRole('button', { name: 'Light', exact: true }).click();
     await expect(page.locator('.scroll-pro-app-root')).toHaveAttribute('data-theme', 'light');
-    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 247, 244)');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(255, 255, 255)');
     await sidebar.getByRole('button', { name: 'System', exact: true }).click();
     await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(5, 6, 8)');
     await page.emulateMedia({ colorScheme: 'light' });
-    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 247, 244)');
+    await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(255, 255, 255)');
     await sidebar.getByRole('button', { name: 'Dark', exact: true }).click();
     await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(5, 6, 8)');
     await sidebar.getByLabel('Outline text size').fill('16');
