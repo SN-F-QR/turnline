@@ -1,13 +1,14 @@
-# Contributing to Scroll
+# Contributing to Turnline
 
 Thanks for your interest in contributing!
 
 ## Setup
 
 ```bash
-git clone https://github.com/asker-kurtelli/scroll.git
-cd scroll
-npm install
+git clone https://github.com/SN-F-QR/turnline.git
+cd turnline
+nvm use              # Node version from .nvmrc
+npm ci
 npm run dev          # Vite dev server with HMR
 npm run build        # Production build to dist/
 npm run build:firefox  # Firefox build to dist-firefox/
@@ -45,4 +46,4 @@ Before submitting a PR:
 
 ## Questions?
 
-Open an issue or reach out on [X](https://x.com/askerkurtelli).
+Open an issue in [Turnline](https://github.com/SN-F-QR/turnline/issues).

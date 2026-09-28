@@ -2,7 +2,7 @@
 
 ## Scope
 
-Scroll is a React/TypeScript browser extension that adds outline navigation, copying, and export tools to ChatGPT, Claude, and Gemini. It runs entirely as a content script; there is no backend or background service worker. Use `README.md` for product behavior and setup details.
+Turnline is a React/TypeScript browser extension that adds outline navigation, copying, and export tools to ChatGPT, Claude, and Gemini. It runs entirely as a content script; there is no backend or background service worker. Use `README.md` for product behavior and setup details.
 
 ## Commands
 

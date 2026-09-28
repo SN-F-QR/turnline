@@ -2,7 +2,7 @@ import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 import { dragOutlineWidth } from '../helpers/sidebar';
 
-const sidebarSelector = '[aria-label="Scroll Pro outline"]';
+const sidebarSelector = '[aria-label="Turnline outline"]';
 
 test('F04/F05 real L02 headings keep their original nested levels', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'long-response-l02');

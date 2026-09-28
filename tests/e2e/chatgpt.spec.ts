@@ -5,7 +5,7 @@ import { loadScenario } from '../helpers/scenario';
 async function openOutline(page: import('@playwright/test').Page) {
   await expect(page.locator('#scroll-pro-root')).toBeAttached();
   await page.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = page.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
   await expect(sidebar).toBeVisible();
   return sidebar;
 }

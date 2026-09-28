@@ -7,7 +7,7 @@ const shortcut = process.platform === 'darwin' ? 'Meta+;' : 'Control+;';
 
 async function openOutline(page: Page) {
     await page.getByRole('button', { name: 'Toggle outline' }).click();
-    const sidebar = page.getByRole('complementary', { name: 'Scroll Pro outline' });
+    const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     return sidebar;
 }
@@ -214,7 +214,7 @@ test('resizing cleans host styles and discards unfinished changes on cancel, clo
 test('hover is opt-in, crosses the toggle gap, cancels closing and preserves click toggling', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const toggle = page.getByRole('button', { name: 'Toggle outline' });
-    const sidebar = page.getByRole('complementary', { name: 'Scroll Pro outline' });
+    const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
     await toggle.hover();
     await page.waitForTimeout(250);
     await expect(sidebar).toBeHidden();

@@ -1,5 +1,5 @@
 {
-  "name": "scroll",
+  "name": "turnline",
   "version": "1.2.1",
   "description": "Navigate, copy, and export your AI chats.",
   "type": "module",
@@ -17,19 +17,19 @@
     "test:e2e:debug": "npm run build && playwright test --headed",
     "test:check": "npm run typecheck && npm run typecheck:tests && npm run test:unit && npm run test:e2e",
     "preview": "vite preview",
-    "package": "npm run build:all && cd dist && zip -r ../scroll-chrome.zip . && cd ../dist-firefox && zip -r ../scroll-firefox.zip ."
+    "package": "npm run build:all && cd dist && zip -r ../turnline-chrome.zip . && cd ../dist-firefox && zip -r ../turnline-firefox.zip ."
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/asker-kurtelli/scroll.git"
+    "url": "git+https://github.com/SN-F-QR/turnline.git"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/asker-kurtelli/scroll/issues"
+    "url": "https://github.com/SN-F-QR/turnline/issues"
   },
-  "homepage": "https://github.com/asker-kurtelli/scroll#readme",
+  "homepage": "https://github.com/SN-F-QR/turnline#readme",
   "dependencies": {
     "@crxjs/vite-plugin": "^2.2.1",
     "@types/marked": "^5.0.2",

@@ -68,7 +68,7 @@ test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', 
   await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Turnline outline' });
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(5);
   await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   await installOlderLoadOnScroll(extensionPage);
@@ -89,7 +89,7 @@ test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', 
 test('F09 long response navigation uses negative reverse-scroll coordinates [P4]', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Turnline outline' });
   await sidebar.getByRole('button', { name: expected.cold.firstHeading!, exact: true }).click();
   await expect.poll(() => extensionPage.locator('.thread-scroll-container').evaluate(scroller => scroller.scrollTop)).toBeLessThan(0);
   await expect.poll(() => extensionPage.locator(headingSelector).first().evaluate(heading => {
@@ -103,7 +103,7 @@ test('F09 positive scroll layout keeps the target in its nested viewport [P4]', 
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   await extensionPage.locator('.thread-scroll-container').evaluate(scroller => { (scroller as HTMLElement).style.flexDirection = 'column'; });
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Turnline outline' });
   await sidebar.getByRole('button', { name: expected.cold.lastHeading!, exact: true }).click();
   await expect.poll(() => extensionPage.locator('.thread-scroll-container').evaluate(scroller => scroller.scrollTop)).toBeGreaterThan(0);
   await expect.poll(() => extensionPage.getByRole('heading', { name: expected.cold.lastHeading!, exact: true }).evaluate(heading => {
@@ -117,7 +117,7 @@ test('F09 navigation reaches a middle turn that is absent from both virtual wind
   await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
   await loadScenario(extensionContext, extensionPage, 'long-response-l01');
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Turnline outline' });
   await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
   const turnKey = await extensionPage.locator('[data-turn-key]').nth(2).getAttribute('data-turn-key');
   const target = sidebar.locator(`[data-block-key="block-gpt-${turnKey}:0:user"]`);
@@ -162,7 +162,7 @@ test('F15 L01 outline discovers older turns without manual chat scrolling [P7]',
   await installOlderLoadOnScroll(extensionPage, true);
   await expect(extensionPage.locator('#scroll-pro-root')).toBeAttached();
   await extensionPage.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = extensionPage.getByRole('complementary', { name: 'Scroll Pro outline' });
+  const sidebar = extensionPage.getByRole('complementary', { name: 'Turnline outline' });
   await expect(sidebar).toBeVisible();
   await expect(sidebar).toContainText(expected.loaded.newPrompt!);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(6);

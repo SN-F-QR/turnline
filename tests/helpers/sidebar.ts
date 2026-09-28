@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 export async function dragOutlineWidth(page: Page, width: number) {
     const handle = page.getByRole('separator', { name: 'Outline width' });
     const rect = (await handle.boundingBox())!;
-    const sidebar = (await page.getByRole('complementary', { name: 'Scroll Pro outline' }).boundingBox())!;
+    const sidebar = (await page.getByRole('complementary', { name: 'Turnline outline' }).boundingBox())!;
     const direction = await page.locator('.scroll-pro-sidebar-shell').getAttribute('data-open-x');
     const x = rect.x + rect.width / 2;
     const y = rect.y + rect.height / 2;

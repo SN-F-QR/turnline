@@ -1,91 +1,104 @@
-# Scroll
+# Turnline
 
-**Navigate, copy, and export your AI conversations.**
+**Find your place in long AI conversations.**
 
-A browser extension that adds a navigation sidebar to ChatGPT, Claude, and Gemini. Jump to any turn, copy prompts and responses, and export discovered conversation content.
+Turnline adds a floating conversation outline to **ChatGPT, Claude, and Gemini**. Jump between prompts and response sections, keep track of what you are reading, and copy or export the content you have discovered.
 
 <p align="center">
-  <img src="assets/demo.png" alt="Scroll sidebar" width="800">
+  <img src="assets/turnline-chatgpt.png" alt="Turnline's conversation outline beside a ChatGPT response, with nested headings and the current reading position highlighted" width="1100">
 </p>
 
-## Install
+## Features
 
-[**Add to Chrome**](https://chromewebstore.google.com/detail/scroll/mpcklmodkihbiblhffoganikkdfoaphe) — works on Chrome, Edge, and Brave.
+|                             | What you can do                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Navigate long chats**     | Jump to a prompt or a heading inside a response. The outline highlights your reading position as you scroll.                                     |
+| **Find a section**          | Filter by prompt, response, or heading text. Collapse individual answer outlines or all turns at once.                                           |
+| **Recover ChatGPT history** | Discover older messages by scrolling the page and retain discovered content when ChatGPT removes it from the visible DOM.                        |
+| **Copy what you need**      | Copy a prompt, a response, a Q&A pair, or the discovered conversation. Choose plain text, Markdown, or JSON for conversation copies.             |
+| **Export a conversation**   | Save the discovered range as Markdown, plain text, or JSON, or use the browser's print dialog to save a PDF.                                     |
+| **Make it comfortable**     | Choose System, Light, or Dark appearance, six accent colors or a custom hex color, a custom light-mode background, and text sizes from 10–24 px. |
+| **Adjust the outline**      | Set heading depth from 1–6, drag the toggle to a convenient position, resize the sidebar, or enable hover mode to open it on pointer entry.      |
 
-### From source
+ChatGPT supports H1–H6 headings, including conservative normalization of numbered chapters. Claude and Gemini currently extract H1–H4. Heading depth changes what appears in the outline; copying and exporting still use the full detected text.
+
+## Install from source
+
+Use the Node.js version pinned in [`.nvmrc`](.nvmrc) (24.13.0):
 
 ```bash
-git clone https://github.com/asker-kurtelli/scroll.git
-cd scroll
-npm install
+git clone https://github.com/SN-F-QR/turnline.git
+cd turnline
+nvm use # If you use nvm
+npm ci
 npm run build
 ```
 
-Load `dist/` as an unpacked extension in Chrome (`chrome://extensions` > Developer Mode > Load Unpacked).
+### Chrome, Edge, and Brave
 
-For Firefox:
+1. Open your browser's extensions page (`chrome://extensions` in Chrome).
+2. Enable **Developer mode** and choose **Load unpacked**.
+3. Select the repository's `dist/` directory.
+4. Open or reload a conversation on ChatGPT, Claude, or Gemini.
+
+After rebuilding, reload the extension on the extensions page and refresh the conversation tab.
+
+### Firefox
 
 ```bash
 npm run build:firefox
 ```
 
-Load `dist-firefox/` as a temporary add-on (`about:debugging` > This Firefox > Load Temporary Add-on).
+In Firefox 128 or later, open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and select `dist-firefox/manifest.json`. Temporary add-ons need to be loaded again after restarting Firefox.
 
-## Features
+## Using Turnline
 
-**Navigate** — A floating table of contents for every conversation. Click any prompt to jump to it instantly. Headings inside long responses are detected for section-level navigation.
+- **Open the outline:** click the floating toggle or press `Cmd + ;` on macOS / `Ctrl + ;` on Windows and Linux.
+- **Jump and filter:** click a prompt or heading to navigate. Use **Filter…** to find matching content and the arrows to collapse answer outlines.
+- **Copy:** right-click a turn for **Copy prompt**, **Copy response**, or **Copy Q&A**. Use the top copy button for the discovered conversation; right-click it to select a format.
+- **Export:** click the top export button, or right-click it to choose Markdown, PDF, Text, or JSON. ChatGPT exports can ask to scroll through older content first; cancelling the scan stops the export.
+- **Customize:** open **Outline settings**. Preferences are saved locally and shared between tabs in the same browser profile.
+- **Move and resize:** press and hold the floating toggle to drag it. Drag the outer sidebar edge to resize from 214–420 px (default: 320 px). Double-click the edge to reset, or focus it and use the Left/Right arrow keys in 10 px steps.
 
-**Copy** — Copy individual prompts, responses, Q&A pairs, or all discovered messages. Toggle markdown mode for formatted output.
+Hover mode is off by default. When enabled, entering the toggle opens the outline and leaving the toggle, sidebar, and menus closes it after a short delay. Clicking the toggle still works.
 
-**Export** — Export conversations to Markdown, PDF, plain text, or JSON. Copy and export share the same captured messages, including independent assistant replies and headings hidden by your depth setting.
+## How much of a chat is captured?
 
-**Reading position** — The outline tracks the message or heading you are reading without moving keyboard focus. A heading hidden by the depth setting falls back to its visible parent or message; collapsed answers highlight their turn title. Repeated clicks replace the previous navigation; a wheel, touch, or key interaction interrupts it. Reduced-motion preferences are respected.
+Turnline reads the conversation DOM. On ChatGPT, opening the outline starts a history scan toward older messages. The scan retains discovered messages, waits for unloaded content, and restores your reading position afterward. You can stop or retry it with the history control. Interacting with the chat takes control back from the scan.
 
-**Collapse** — Use the icon beside history refresh to collapse or expand all discovered turns, including turns hidden by search. Individual arrows toggle each answer outline. New turns start expanded, and switching conversations resets collapsed turns.
+**A finished scan means no more messages were found in the page; it does not guarantee that the provider has returned the entire conversation.** Copy and export describe the discovered range. An interrupted scan reports why it is incomplete. JSON exports distinguish a finished scan (`scanStatus: "finished"`, `complete: null`) from an unfinished one (`complete: false`).
 
-**ChatGPT history** — Opening the outline automatically searches toward older messages and retains discovered messages when ChatGPT replaces its visible DOM. Use **Stop** to cancel or **Scan history** to retry. Scrolling, touching, clicking or typing in the chat immediately takes control back from the scan; it will not pull you back afterward. The scan also visits empty message/heading placeholders and restores your reading position afterward. Clicking an evicted message attempts to load its DOM again; unavailable messages are reported.
+Claude and Gemini use the messages detected on the page; automatic history discovery is currently specific to ChatGPT. Navigation to a message that has been removed from the DOM attempts to load it again on ChatGPT and reports when it is unavailable.
 
-After checking the oldest available messages without finding new messages or unresolved content, the outline shows **Scan finished · No more messages found**. Layout changes and text streaming in existing replies do not keep history discovery running. Missing content, a 15-second timeout, cancellation or an error still shows **Incomplete** and its reason. A finished DOM scan does not prove that the server has returned the entire chat: copies and exports describe the discovered range, and JSON separates `scanStatus: "finished"` from `complete: null` (overall completeness unknown). An unfinished scan uses `complete: false`. Cancelling an export stops the download. No background API, account access, or persistent chat archive is used; discovered messages are kept in memory for the current conversation.
+## Privacy and architecture
 
-**Search** — Filter turns and headings by keyword.
+Conversation parsing and export run in your browser. Turnline has no backend, analytics, or background service worker, and does not call provider conversation APIs. It requires no additional account.
 
-**Drag** — Press and hold to reposition the toggle button anywhere on screen. Drag the outer sidebar edge to adjust its width from 214px to 420px (default 320px), or focus the edge and use Left/Right arrows in 10px steps. Double-click the edge to restore the default 320px width. The chosen width persists; smaller windows temporarily limit the displayed width.
+Discovered messages are held in memory for the current conversation, without a persistent chat archive. The extension requests the `storage` permission to save outline preferences locally. Its UI is isolated from the host page in a Shadow DOM.
 
-**Outline settings** — Open the gear button for a dedicated settings view. Choose one of six theme colors (Blue, Green, Yellow, Pink, Orange, or Purple) or enter a custom hex theme color; choose System, Light, or Dark appearance; set an optional custom hex background; enter an outline text size from 10px to 24px; and choose heading depth 1–6 (default 4). Enable **Hover mode** to open the outline when the mouse enters the toggle and close it 200ms after leaving the toggle, sidebar and menus. Clicking still toggles it; dragging and dialogs pause automatic closing. Hover mode defaults off. Custom backgrounds automatically use readable light or dark text. Press Escape or use the back button to return to the outline. Preferences persist locally and synchronize between tabs. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
+Built with **React, TypeScript, Vite, Tailwind CSS v4, and Manifest V3**.
 
-## Keyboard shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Cmd/Ctrl + ;` | Toggle sidebar |
-
-## How it works
-
-Scroll runs as a content script on ChatGPT, Claude, and Gemini. It watches the DOM for conversation turns using a MutationObserver and renders a sidebar table of contents inside a Shadow DOM.
-
-No data leaves your browser. No account required. The extension uses the storage permission for local settings.
-
-**Tech stack:** TypeScript, React, Vite, Tailwind CSS v4, Manifest V3.
-
-## Local verification
-
-Use Node 24.13.0 from `.nvmrc` (CI baseline):
+## Development
 
 ```bash
-npm ci
+npm run dev           # Vite development server
+npm run typecheck     # Production TypeScript checks
+npm run test:ci       # Production/test type checks and unit tests
 npx playwright install chromium
-npm run test:ci       # Production/test type checks and Node unit tests
-npm run test:e2e      # Build Chrome once, then offline Chromium extension tests
-npm run test:check    # All local checks above
-npm run build:firefox # Clean and rebuild dist-firefox/
+npm run test:e2e      # Build Chrome and run offline extension tests
+npm run test:check    # All automated checks
+npm run build:all     # Build both Chrome and Firefox
+npm run package       # Create turnline-chrome.zip and turnline-firefox.zip
 ```
 
-The browser tests load the real extension and replay local DOM captures without accessing an account. Synthetic transitions are labeled in the tests. Chromium tests and a Firefox build do not replace live ChatGPT, Claude, Gemini or Firefox smoke checks. Scheduled-message DOM and release-time live-site checks remain separate validation work.
+Browser tests load the real extension against sanitized, offline provider fixtures. They do not access an account. Run Playwright outside a restricted sandbox on macOS. Offline Chromium tests and a Firefox build are supplemented by live-site smoke checks before a release, since provider markup changes over time.
 
-## Contributing
+See [contributing.md](contributing.md) for the contribution workflow. Report bugs or suggest features through [Turnline issues](https://github.com/SN-F-QR/turnline/issues).
 
-See [contributing.md](contributing.md) for guidelines.
+## Acknowledgements
+
+Turnline is now independently maintained and originated from [Scroll](https://github.com/asker-kurtelli/scroll) by **Asker Kurt-Elli**.
 
 ## License
 
-MIT — [Asker Kurt-Elli](https://x.com/askerkurtelli)
+[MIT](LICENSE). The original copyright notice and license terms are preserved, with an additional notice for Turnline contributions.

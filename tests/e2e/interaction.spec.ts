@@ -4,7 +4,7 @@ import { loadScenario } from '../helpers/scenario';
 
 async function open(page: import('@playwright/test').Page) {
     await page.getByRole('button', { name: 'Toggle outline' }).click();
-    return page.getByRole('complementary', { name: 'Scroll Pro outline' });
+    return page.getByRole('complementary', { name: 'Turnline outline' });
 }
 
 test('reading follows a short final section at the bottom without changing the first prompt alignment', async ({ extensionContext, extensionPage: page }) => {

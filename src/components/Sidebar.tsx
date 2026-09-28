@@ -1356,7 +1356,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     onPointerEnter={hover.onPointerEnter}
                     onPointerLeave={hover.onPointerLeave}
                     role="complementary"
-                    aria-label="Scroll Pro outline"
+                    aria-label="Turnline outline"
                     onMouseEnter={() => { pointerInSidebar.current = true; }}
                     onMouseLeave={() => { pointerInSidebar.current = false; }}
 
@@ -1699,7 +1699,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                         <div className="scroll-pro-modal-header">
                             <span className="scroll-pro-modal-badge">Discover history</span>
                             <h3 id="scroll-pro-capture-title">Load more of this chat</h3>
-                            <p className="scroll-pro-modal-sub">Scroll will search for older messages and load hidden content, then restore your reading position. You can stop the scan. Exports include the discovered range and indicate when completeness is unverified.</p>
+                            <p className="scroll-pro-modal-sub">Turnline will search for older messages and load hidden content, then restore your reading position. You can stop the scan. Exports include the discovered range and indicate when completeness is unverified.</p>
                         </div>
                         <ul className="scroll-pro-modal-list">
                             <li>Searches toward older messages</li>
