@@ -1,6 +1,5 @@
 import type { Turn } from '../types/index.ts';
 import type { Block } from './conversationBlocks.ts';
-import { getHeadingLevel } from './outlineSettings.ts';
 
 type OutlineTurn = Pick<Turn, 'id' | 'role' | 'text' | 'headings' | 'contextLabel' | 'timeLabel'>;
 
@@ -16,7 +15,7 @@ export function filterOutlineBlocks<T extends OutlineTurn>(blocks: readonly Bloc
         const promptMatches = !term || !!block.prompt?.text.toLowerCase().includes(term);
         const headingIndices: number[] = [];
         block.headings.forEach((heading, index) => {
-            if (getHeadingLevel(heading) <= depth && (promptMatches || heading.innerText.toLowerCase().includes(term))) {
+            if (block.headingDepths[index] <= depth && (promptMatches || heading.innerText.toLowerCase().includes(term))) {
                 headingIndices.push(index);
             }
         });

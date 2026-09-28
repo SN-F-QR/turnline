@@ -15,7 +15,7 @@ import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
 import { filterOutlineBlocks } from '../lib/outlineFilter';
-import { getHeadingLevel, getOutlineWidth, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '../lib/outlineSettings';
+import { getOutlineWidth, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '../lib/outlineSettings';
 import type { OutlineSettingsController } from '../hooks/useOutlineSettings';
 import { useSidebarResize } from '../hooks/useSidebarResize';
 import { useSidebarHover } from '../hooks/useSidebarHover';
@@ -854,11 +854,11 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     if (heading.element.isConnected && heading.element.getClientRects().length && heading.element.getBoundingClientRect().top <= line) index = i;
                 });
                 if (index >= 0) {
-                    let level = getHeadingLevel(block.headings[index]);
+                    let level = block.headingDepths[index];
                     if (!headingIndices.includes(index)) {
                         // Walk ancestors, skipping preceding siblings of the hidden heading.
                         while (--index >= 0) {
-                            const candidate = getHeadingLevel(block.headings[index]);
+                            const candidate = block.headingDepths[index];
                             if (candidate < level) {
                                 level = candidate;
                                 if (headingIndices.includes(index)) break;
@@ -1571,9 +1571,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                                         return (
                                                             <button
                                                                 key={headingKey}
-                                                                data-outline-level={getHeadingLevel(h)}
+                                                                data-outline-level={block.headingDepths[i]}
                                                                 title={h.innerText}
-                                                                style={{ paddingLeft: `${26 + (getHeadingLevel(h) - 1) * 12}px` }}
+                                                                style={{ paddingLeft: `calc(26px + ${block.headingDepths[i]} * var(--outline-indent))` }}
                                                                 ref={(el) => {
                                                                     if (el) {
                                                                         itemRefs.current.set(headingKey, el);
@@ -1608,7 +1608,6 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                                             }}
                                                             className={`scroll-pro-subheading ${focusedIndex === focusIndexByKey.get(`${block.key}-heading-0`) ? 'is-focused' : ''} ${activeKey === `${block.key}-heading-0` ? 'is-reading' : ''}`}
                                                             aria-current={activeKey === `${block.key}-heading-0` ? 'location' : undefined}
-                                                            style={{ paddingLeft: '26px' }}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const headingFocusIndex = focusIndexByKey.get(`${block.key}-heading-0`) ?? -1;

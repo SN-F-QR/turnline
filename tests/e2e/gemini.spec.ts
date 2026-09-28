@@ -9,11 +9,12 @@ type GeminiExpected = {
   headings: string[];
   headingCounts: number[];
   headingLevels: number[];
+  outlineDepths: number[];
   responseSnippets: string[];
 };
 
 const scrollerSelector = 'infinite-scroller.chat-history';
-const headingSelector = 'model-response message-content .markdown :is(h1, h2, h3, h4)';
+const headingSelector = 'model-response message-content .markdown :is(h1, h2, h3, h4, h5, h6)';
 
 async function loadGemini(context: BrowserContext, page: Page): Promise<GeminiExpected> {
   const root = resolve('tests/fixtures/gemini/current-conversation');
@@ -44,13 +45,14 @@ async function openOutline(page: Page) {
   return sidebar;
 }
 
-test('Gemini current capture keeps all heading titles and levels while earlier H3s are skipped', async ({ extensionContext, extensionPage: page }) => {
+test('Gemini current capture normalizes response depths while earlier H3s are skipped', async ({ extensionContext, extensionPage: page }) => {
   const expected = await loadGemini(extensionContext, page);
   expect(await page.locator('user-query, model-response').evaluateAll(turns =>
     turns.map(turn => turn.tagName === 'USER-QUERY' ? 'user' : 'assistant'),
   )).toEqual(expected.roles);
   await expect(page.locator('message-content .markdown')).toHaveCount(expected.headingCounts.length);
   await expect(page.locator(headingSelector)).toHaveText(expected.headings);
+  expect(await page.locator(headingSelector).evaluateAll(nodes => nodes.map(node => Number(node.tagName.slice(1))))).toEqual(expected.headingLevels);
   await expect(page.locator('.turn-content-visibility')).toHaveCSS('content-visibility', 'auto');
   await expect.poll(() => page.locator(headingSelector).first().evaluate(heading => (heading as HTMLElement).innerText)).toBe('');
 
@@ -59,7 +61,7 @@ test('Gemini current capture keeps all heading titles and levels while earlier H
   await expect(sidebar.locator('[data-outline-level]')).toHaveText(expected.headings);
   expect(await sidebar.locator('[data-outline-level]').evaluateAll(headings =>
     headings.map(heading => Number(heading.getAttribute('data-outline-level'))),
-  )).toEqual(expected.headingLevels);
+  )).toEqual(expected.outlineDepths);
   await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toHaveCount(0);
   await expect(sidebar).not.toContainText('You said');
   await expect(sidebar).not.toContainText('Gemini said');
@@ -107,14 +109,14 @@ test('Gemini scopes extraction to the current chat and preserves rendered headin
   await expect(sidebar).not.toContainText('Hidden label');
 });
 
-test('Gemini empty streaming headings acquire titles offscreen across H1-H4 (modeled streaming)', async ({ extensionContext, extensionPage: page }) => {
+test('Gemini empty streaming headings acquire titles offscreen across H1-H6 (modeled streaming)', async ({ extensionContext, extensionPage: page }) => {
   const expected = await loadGemini(extensionContext, page);
   const sidebar = await openOutline(page);
   await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-  await sidebar.getByLabel('Heading depth').selectOption('4');
+  await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('6');
   await sidebar.getByRole('button', { name: 'Back to outline' }).click();
   await page.locator('message-content .markdown').first().evaluate(markdown => {
-    for (const level of [1, 2, 3, 4]) {
+    for (const level of [1, 2, 3, 4, 5, 6]) {
       const heading = document.createElement(`h${level}`);
       heading.dataset.streamingHeading = String(level);
       heading.appendChild(document.createTextNode(' \n '));
@@ -125,7 +127,7 @@ test('Gemini empty streaming headings acquire titles offscreen across H1-H4 (mod
     markdown.appendChild(sentinel);
   });
   // The populated sentinel proves this mutation has been parsed before the
-  // assertion checks that the four empty headings were omitted.
+  // assertion checks that the six empty headings were omitted.
   await expect(sidebar.locator('[data-outline-level]')).toHaveText([
     ...expected.headings.slice(0, expected.headingCounts[0]), 'Streaming in progress',
     ...expected.headings.slice(expected.headingCounts[0]),
@@ -133,7 +135,7 @@ test('Gemini empty streaming headings acquire titles offscreen across H1-H4 (mod
   await page.locator('[data-streaming-heading]').evaluateAll(headings => {
     headings.forEach(heading => { heading.firstChild!.textContent = ` Streamed H${heading.getAttribute('data-streaming-heading')} title `; });
   });
-  const streamed = ['Streamed H1 title', 'Streamed H2 title', 'Streamed H3 title', 'Streamed H4 title'];
+  const streamed = ['Streamed H1 title', 'Streamed H2 title', 'Streamed H3 title', 'Streamed H4 title', 'Streamed H5 title', 'Streamed H6 title'];
   await expect(sidebar.locator('[data-outline-level]')).toHaveText([
     ...expected.headings.slice(0, expected.headingCounts[0]), ...streamed, 'Streaming in progress',
     ...expected.headings.slice(expected.headingCounts[0]),
@@ -164,13 +166,13 @@ test('Gemini replaces its current scroller without duplicate or stale outline he
   })).toBe(true);
 });
 
-test('Gemini export retains offscreen headings and full replies when outline depth hides H3', async ({ extensionContext, extensionPage: page }) => {
+test('Gemini export retains offscreen headings and full replies when outline depth hides children', async ({ extensionContext, extensionPage: page }) => {
   const expected = await loadGemini(extensionContext, page);
   const sidebar = await openOutline(page);
   await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-  await sidebar.getByLabel('Heading depth').selectOption('2');
+  await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('1');
   await sidebar.getByRole('button', { name: 'Back to outline' }).click();
-  await expect(sidebar.locator('[data-outline-level]')).toHaveCount(expected.headingLevels.filter(level => level <= 2).length);
+  await expect(sidebar.locator('[data-outline-level]')).toHaveCount(expected.outlineDepths.filter(depth => depth === 1).length);
   await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: /^JSON/ }).click();

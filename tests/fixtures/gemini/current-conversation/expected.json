@@ -77,6 +77,11 @@
     3,
     2
   ],
+  "outlineDepths": [
+    1, 1, 1,
+    1, 2, 2, 1, 1, 2, 1, 1, 1, 2, 2, 1, 2, 2,
+    1, 2, 2, 1, 1, 2, 2, 1, 1, 2, 1
+  ],
   "responseSnippets": [
     "is a historic slope located in the Kasumigaseki district of Chiyoda Ward, Tokyo.",
     "The Tokugawa regime established an institutional balance of power",

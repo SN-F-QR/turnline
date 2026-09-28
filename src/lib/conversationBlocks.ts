@@ -1,4 +1,5 @@
 import type { Turn } from '../types/index.ts';
+import { getHeadingDepths } from './outlineDepth.ts';
 
 export type Block<T extends Pick<Turn, 'id' | 'role' | 'text' | 'headings' | 'contextLabel' | 'timeLabel'> = Turn> = {
     key: string;
@@ -7,6 +8,7 @@ export type Block<T extends Pick<Turn, 'id' | 'role' | 'text' | 'headings' | 'co
     prompt?: T;
     answer?: T;
     headings: T['headings'];
+    headingDepths: number[];
 };
 
 const label = <T extends Pick<Turn, 'text' | 'headings' | 'contextLabel' | 'timeLabel'>>(turn: T) => {
@@ -32,6 +34,7 @@ export function buildConversationBlocks<T extends Pick<Turn, 'id' | 'role' | 'te
                 prompt: turn,
                 answer,
                 headings: answer?.headings || [],
+                headingDepths: getHeadingDepths(answer?.headings || []),
             });
             if (answer) i++;
         } else {
@@ -41,6 +44,7 @@ export function buildConversationBlocks<T extends Pick<Turn, 'id' | 'role' | 'te
                 title: label(turn),
                 answer: turn,
                 headings: turn.headings,
+                headingDepths: getHeadingDepths(turn.headings),
             });
         }
     }

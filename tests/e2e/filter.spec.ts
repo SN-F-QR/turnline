@@ -85,13 +85,13 @@ test('filter excludes body text and preserves prompt matches and collapse state'
     await expect(blocks.last().locator('.scroll-pro-subheading')).toHaveCount(1);
 });
 
-test('section filter follows heading depth while a prompt match retains the available outline', async ({ extensionContext, extensionPage: page }) => {
+test('section filter follows response depth while a prompt match retains the available outline', async ({ extensionContext, extensionPage: page }) => {
     const sidebar = await openFilterScenario(extensionContext, page);
     const filter = sidebar.getByPlaceholder('Filter…');
     await filter.fill('Orbit Beta');
     await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(['Orbit Beta']);
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-    await sidebar.getByLabel('Heading depth').selectOption('2');
+    await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('1');
     await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
     await expect(sidebar.getByText('No items found', { exact: true })).toBeVisible();
@@ -99,7 +99,7 @@ test('section filter follows heading depth while a prompt match retains the avai
     await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(['Orbit Alpha']);
     await filter.fill('Orbit Beta');
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-    await sidebar.getByLabel('Heading depth').selectOption('3');
+    await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('2');
     await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await expect(filter).toHaveValue('Orbit Beta');
     await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(['Orbit Beta']);

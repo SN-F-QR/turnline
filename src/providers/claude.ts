@@ -122,7 +122,7 @@ export const claude: Provider = {
                 const contentEl = getResponseContent(assistantEl);
                 const text = (serializeNodeToMarkdown(contentEl) || contentEl.innerText || '').trim();
                 if (text) {
-                    const headings = Array.from(contentEl.querySelectorAll('h1, h2, h3, h4')).map(h => ({
+                    const headings = Array.from(contentEl.querySelectorAll('h1, h2, h3, h4, h5, h6')).map(h => ({
                         innerText: (h as HTMLElement).innerText,
                         element: h as HTMLElement,
                         tagName: h.tagName

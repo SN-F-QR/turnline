@@ -770,6 +770,7 @@
 }
 
 .scroll-pro-item-body {
+  --outline-indent: 12px;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -870,6 +871,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin-inline: -6px;
   padding-left: 0;
 }
 
@@ -888,6 +890,8 @@
   color: var(--text-tertiary);
   text-align: left;
   padding: 2px 6px;
+  /* Prompt text starts 26px into the shared row; answers add one indent. */
+  padding-left: calc(26px + var(--outline-indent));
   font-size: var(--outline-secondary-size, 12px);
   border-radius: 4px;
   cursor: pointer;
@@ -1265,6 +1269,87 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.scroll-pro-setting-label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scroll-pro-setting-help-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.scroll-pro-setting-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: default;
+}
+
+.scroll-pro-setting-help:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.scroll-pro-setting-tooltip {
+  position: absolute;
+  z-index: 10;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(200px, calc(100cqw - 32px));
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--text-primary);
+  color: var(--bg-app);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: left;
+  animation: setting-tooltip-enter 150ms ease-out;
+}
+
+/* Keep the tooltip open while crossing the gap from the help icon. */
+.scroll-pro-setting-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 100%;
+  height: 8px;
+}
+
+.scroll-pro-setting-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@keyframes setting-tooltip-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-pro-setting-tooltip { animation: none; }
 }
 
 .scroll-pro-setting-row {

@@ -24,7 +24,7 @@ test('prompt matches keep all headings within the selected depth and preserve so
     const blocks = conversation();
     const originalHeadings = blocks[0].headings;
     blocks.forEach(block => { Object.freeze(block); Object.freeze(block.headings); });
-    const results = filterOutlineBlocks(blocks, '  ASTRONOMY  ', 4);
+    const results = filterOutlineBlocks(blocks, '  ASTRONOMY  ', 2);
     assert.equal(results.length, 1);
     assert.equal(results[0].block, blocks[0]);
     assert.equal(results[0].block.headings, originalHeadings);
@@ -67,7 +67,7 @@ test('independent answers only match section headings, excluding title, context 
 test('empty or whitespace queries restore every block, including prompts and independent answers', () => {
     const blocks = [...conversation(), ...buildConversationBlocks([answer('a3', 'Independent answer')])];
     for (const query of ['', ' \n\t ']) {
-        const results = filterOutlineBlocks(blocks, query, 2);
+        const results = filterOutlineBlocks(blocks, query, 1);
         assert.deepEqual(results.map(result => result.block), blocks);
         assert.deepEqual(results.map(result => result.headingIndices), [[0], [], [], []]);
     }
@@ -77,12 +77,21 @@ test('empty or whitespace queries restore every block, including prompts and ind
 
 test('section matching obeys depth, including inferred outline levels', () => {
     const blocks = conversation();
-    assert.deepEqual(filterOutlineBlocks(blocks, 'Orbit Beta', 2), []);
-    assert.deepEqual(filterOutlineBlocks(blocks, 'Moon archive', 4), []);
-    assert.deepEqual(filterOutlineBlocks(blocks, 'Orbit Beta', 3)[0].headingIndices, [1]);
-    assert.deepEqual(filterOutlineBlocks(blocks, 'Moon archive', 6)[0].headingIndices, [2]);
+    assert.deepEqual(filterOutlineBlocks(blocks, 'Orbit Beta', 1), []);
+    assert.deepEqual(filterOutlineBlocks(blocks, 'Moon archive', 2), []);
+    assert.deepEqual(filterOutlineBlocks(blocks, 'Orbit Beta', 2)[0].headingIndices, [1]);
+    assert.deepEqual(filterOutlineBlocks(blocks, 'Moon archive', 3)[0].headingIndices, [2]);
     const inferred = buildConversationBlocks([answer('a3', '', [heading('Inferred chapter', 4, 1)])]);
     assert.deepEqual(filterOutlineBlocks(inferred, 'chapter', 1)[0].headingIndices, [0]);
+});
+
+test('search does not promote a matching child or recompute its indentation', () => {
+    const blocks = conversation();
+    const results = filterOutlineBlocks(blocks, 'Moon archive', 3);
+    assert.deepEqual(results[0].headingIndices, [2]);
+    assert.equal(results[0].block.headingDepths, blocks[0].headingDepths);
+    assert.deepEqual(results[0].block.headingDepths, [1, 2, 3]);
+    assert.deepEqual(filterOutlineBlocks(blocks, 'Moon archive', 1), []);
 });
 
 test('queries are literal substrings within a single heading', () => {

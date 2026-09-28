@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { OutlineSettingsController } from '../hooks/useOutlineSettings';
 import { normalizeHexColor, parseOutlineFontSize, type AccentPreset, type ThemeMode } from '../lib/outlineSettings';
 
@@ -21,6 +21,46 @@ const accentOptions: { label: string; value: AccentPreset }[] = [
     { label: 'Orange', value: 'orange' },
     { label: 'Purple', value: 'purple' },
 ];
+
+const outlineDepthHelp = 'Controls how many heading levels appear in each response.';
+
+function OutlineDepthHelp() {
+    const tooltipId = useId();
+    const [hovered, setHovered] = useState(false);
+    const [focused, setFocused] = useState(false);
+    const [dismissed, setDismissed] = useState(false);
+    const open = (hovered || focused) && !dismissed;
+
+    return (
+        <span
+            className="scroll-pro-setting-help-wrap"
+            onMouseEnter={() => { setHovered(true); setDismissed(false); }}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <button
+                type="button"
+                className="scroll-pro-setting-help"
+                aria-label="About outline depth"
+                aria-describedby={open ? tooltipId : undefined}
+                onFocus={() => { setFocused(true); setDismissed(false); }}
+                onBlur={() => setFocused(false)}
+                onKeyDown={event => {
+                    if (event.key !== 'Escape' || !open) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setDismissed(true);
+                }}
+            >
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7.5" fill="#e5e7eb" />
+                    <path d="M6.25 5.75a1.75 1.75 0 0 1 3.5 0c0 1.25-1.75 1.5-1.75 2.75" stroke="#6b7280" strokeWidth="1.3" strokeLinecap="round" />
+                    <circle cx="8" cy="11" r="0.7" fill="#6b7280" />
+                </svg>
+            </button>
+            {open && <span id={tooltipId} role="tooltip" className="scroll-pro-setting-tooltip">{outlineDepthHelp}</span>}
+        </span>
+    );
+}
 
 type HexColorFieldProps = {
     label: string;
@@ -242,11 +282,14 @@ export default function SettingsPanel({ settings, onBack }: SettingsPanelProps) 
                     <PixelSizeField value={settings.fontSize} onChange={settings.updateFontSize} />
 
                     <div className="scroll-pro-setting-row">
-                        <span className="scroll-pro-setting-label">Heading depth</span>
+                        <span className="scroll-pro-setting-label scroll-pro-setting-label-with-help">
+                            Outline depth
+                            <OutlineDepthHelp />
+                        </span>
                         <div className="scroll-pro-setting-control">
                             <div className="scroll-pro-setting-select">
-                                <select aria-label="Heading depth" value={settings.depth} onChange={event => settings.updateDepth(Number(event.target.value))}>
-                                    {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={level}>H1–H{level}</option>)}
+                                <select aria-label="Outline depth" aria-description={outlineDepthHelp} value={settings.depth} onChange={event => settings.updateDepth(Number(event.target.value))}>
+                                    {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={level}>{level === 6 ? 'All levels' : `${level} ${level === 1 ? 'level' : 'levels'}`}</option>)}
                                 </select>
                                 <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                             </div>

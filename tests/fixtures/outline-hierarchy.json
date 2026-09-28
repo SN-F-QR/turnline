@@ -1,0 +1,10 @@
+[
+  { "id": "starts-h1", "levels": [1, 2, 3], "depths": [1, 2, 3] },
+  { "id": "starts-h2", "levels": [2, 3, 4], "depths": [1, 2, 3] },
+  { "id": "skips-h3", "levels": [2, 4, 5], "depths": [1, 2, 3] },
+  { "id": "unequal-siblings", "levels": [2, 4, 3], "depths": [1, 2, 2] },
+  { "id": "later-root", "levels": [3, 2, 3], "depths": [1, 1, 2] },
+  { "id": "starts-h5", "levels": [5, 6], "depths": [1, 2] },
+  { "id": "siblings-and-roots", "levels": [2, 4, 4, 3, 4, 2, 6], "depths": [1, 2, 2, 2, 3, 1, 2] },
+  { "id": "all-six", "levels": [1, 2, 3, 4, 5, 6], "depths": [1, 2, 3, 4, 5, 6] }
+]

@@ -1,1 +1,1 @@
-Synthetic minimal compatibility fixture for shared outline settings only. Not a current-site DOM capture or evidence of live Claude support. Existing H1–H4 extraction is unchanged.
+Synthetic minimal compatibility fixture for shared outline settings only. Not a current-site DOM capture or evidence of live Claude support. Browser tests also insert the shared `../outline-hierarchy.json` scenarios into these wrappers to cover H1–H6 extraction and per-response depth.

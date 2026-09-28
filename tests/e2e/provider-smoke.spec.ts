@@ -35,14 +35,14 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
         await sidebar.getByRole('button', { name: 'Expand all turns' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
-        // ChatGPT's Chinese chapter inference must not leak into other adapters.
-        await expect(sidebar.getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '2');
+        // Relative depth is shared; numbered chapter inference stays provider-specific.
+        await expect(sidebar.getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '1');
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-        await sidebar.getByLabel('Heading depth').selectOption('1');
+        await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('1');
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
-        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
+        await expect(sidebar.locator('[data-outline-level]')).toHaveText(['一、Overview', '二、Summary']);
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-        await sidebar.getByLabel('Heading depth').selectOption('6');
+        await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('6');
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar).toBeVisible();

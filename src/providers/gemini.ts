@@ -39,7 +39,7 @@ export const gemini: Provider = {
                     text = serializeNodeToMarkdown(markdown) || (markdown as HTMLElement).innerText || '';
                     // Offscreen turns use content-visibility:auto: innerText can
                     // be empty even though their heading text remains in the DOM.
-                    headings = Array.from(markdown.querySelectorAll<HTMLElement>('h1, h2, h3, h4')).map(h => ({
+                    headings = Array.from(markdown.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')).map(h => ({
                         innerText: h.innerText.trim() || h.textContent?.trim() || '',
                         element: h,
                         tagName: h.tagName

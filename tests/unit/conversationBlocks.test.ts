@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildConversationBlocks } from '../../src/lib/conversationBlocks.ts';
+import type { Turn } from '../../src/types/index.ts';
 
-type Entry = { id: string; role: 'user' | 'assistant'; text: string; headings: []; contextLabel?: string; timeLabel?: string };
+type Entry = Pick<Turn, 'id' | 'role' | 'text' | 'headings' | 'contextLabel' | 'timeLabel'>;
 const U = (id: string): Entry => ({ id, role: 'user', text: id, headings: [] });
 const A = (id: string, contextLabel?: string): Entry => ({ id, role: 'assistant', text: id, headings: [], contextLabel });
 
@@ -27,4 +28,26 @@ test('independent assistant title prefers context, time, heading, then text', ()
     assert.equal(buildConversationBlocks([base])[0].title, 'text');
     assert.equal(buildConversationBlocks([{ ...base, timeLabel: '9:30 AM' }])[0].title, '9:30 AM · text');
     assert.equal(buildConversationBlocks([{ ...base, contextLabel: 'Daily brief', timeLabel: '9:30 AM' }])[0].title, '9:30 AM · Daily brief');
+});
+
+test('each answer gets independent depths without changing source headings or counting the prompt', () => {
+    const headings = (levels: number[]) => levels.map(level => ({ innerText: `Level ${level}`, tagName: `H${level}`, element: {} as HTMLElement }));
+    const turns: Entry[] = [
+        { ...U('u'), headings: headings([1, 2]) },
+        { ...A('a'), headings: headings([2, 4, 5]) },
+        { ...A('b', 'Independent update'), headings: headings([5, 6]) },
+        U('unanswered'),
+    ];
+    turns.forEach(turn => {
+        turn.headings.forEach(Object.freeze);
+        Object.freeze(turn.headings);
+        Object.freeze(turn);
+    });
+    const blocks = buildConversationBlocks(turns);
+    assert.deepEqual(blocks.map(block => block.headingDepths), [[1, 2, 3], [1, 2], []]);
+    assert.equal(blocks[0].headings, turns[1].headings);
+    assert.equal(blocks[1].headings, turns[2].headings);
+    assert.equal(blocks[0].headings[1], turns[1].headings[1]);
+    assert.equal(blocks[0].answer, turns[1]);
+    assert.deepEqual(turns[1].headings.map(heading => heading.tagName), ['H2', 'H4', 'H5']);
 });

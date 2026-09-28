@@ -18,9 +18,9 @@ Turnline adds a floating conversation outline to **ChatGPT, Claude, and Gemini**
 | **Copy what you need**      | Copy a prompt, a response, a Q&A pair, or the discovered conversation. Choose plain text, Markdown, or JSON for conversation copies.             |
 | **Export a conversation**   | Save the discovered range as Markdown, plain text, or JSON, or use the browser's print dialog to save a PDF.                                     |
 | **Make it comfortable**     | Choose System, Light, or Dark appearance, six accent colors or a custom hex color, a custom light-mode background, and text sizes from 10–24 px. |
-| **Adjust the outline**      | Set heading depth from 1–6, drag the toggle to a convenient position, resize the sidebar, or enable hover mode to open it on pointer entry.      |
+| **Adjust the outline**      | Show 1–5 heading levels per response or all levels, drag the toggle to a convenient position, resize the sidebar, or enable hover mode to open it on pointer entry. |
 
-ChatGPT supports H1–H6 headings, including conservative normalization of numbered chapters. Claude and Gemini currently extract H1–H4. Heading depth changes what appears in the outline; copying and exporting still use the full detected text.
+All three providers support H1–H6 headings. Outline depth is calculated independently for each response: top-level headings start at level 1, and skipped HTML heading levels do not create empty indentation. ChatGPT also conservatively repairs numbered chapters before calculating depth. The default shows up to four levels; existing depth preferences are retained. Depth and search change what appears in the outline; copying and exporting still use the full detected text with its original heading markers.
 
 ## Install from source
 
@@ -54,7 +54,7 @@ In Firefox 128 or later, open `about:debugging`, choose **This Firefox → Load 
 ## Using Turnline
 
 - **Open the outline:** click the floating toggle or press `Cmd + ;` on macOS / `Ctrl + ;` on Windows and Linux.
-- **Jump and filter:** click a prompt row or heading to navigate. **Filter…** matches prompt and section heading text within your heading depth setting, ignoring case and leading or trailing search spaces. A matching prompt keeps its answer outline; otherwise, only matching sections appear under their turn. Response body text and answer summaries are not searched. Clear the filter to restore all turns. Use the arrows to collapse answer outlines; filtering preserves their collapsed state. Copies and exports include the full discovered content.
+- **Jump and filter:** click a prompt row or heading to navigate. **Filter…** matches prompt and section heading text within your outline depth setting, ignoring case and leading or trailing search spaces. A matching prompt keeps its answer outline; otherwise, only matching sections appear under their turn. Response body text and answer summaries are not searched. Clear the filter to restore all turns. Use the arrows to collapse answer outlines; filtering preserves their collapsed state. Copies and exports include the full discovered content.
 - **Copy:** right-click a turn for **Copy prompt**, **Copy response**, or **Copy Q&A**. Use the top copy button for the discovered conversation; right-click it to select a format.
 - **Export:** click the top export button, or right-click it to choose Markdown, PDF, Text, or JSON. ChatGPT exports can ask to scroll through older content first; cancelling the scan stops the export.
 - **Customize:** open **Outline settings**. Preferences are saved locally and shared between tabs in the same browser profile.

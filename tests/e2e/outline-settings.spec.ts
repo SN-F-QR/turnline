@@ -4,19 +4,19 @@ import { dragOutlineWidth } from '../helpers/sidebar';
 
 const sidebarSelector = '[aria-label="Turnline outline"]';
 
-test('F04/F05 L02 outline preserves prompts, headings and original nested levels', async ({ extensionContext, extensionPage: page }) => {
+test('F04/F05 L02 outline preserves prompts and normalizes each response independently', async ({ extensionContext, extensionPage: page }) => {
     const expected = await loadScenario(extensionContext, page, 'long-response-l02');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     const levels = await page.locator('[data-markdown-text-style] h1, [data-markdown-text-style] h2, [data-markdown-text-style] h3').evaluateAll(nodes =>
-        nodes.filter(node => !node.closest('[data-d-component="box"]')).map(node => node.tagName.slice(1))
+        nodes.filter(node => !node.closest('[data-d-component="box"]')).map(node => Number(node.tagName.slice(1)))
     );
     const sidebar = page.locator(sidebarSelector);
     await expect(sidebar.locator('.scroll-pro-item-title').first()).toContainText(expected.firstPrompt!);
     await expect(sidebar.getByRole('button', { name: expected.firstHeading!, exact: true })).toBeVisible();
     await expect(sidebar.getByRole('button', { name: expected.lastHeading!, exact: true })).toBeVisible();
     await expect(sidebar.locator('[data-outline-level]')).toHaveCount(levels.length);
-    // This real answer has only one Chinese chapter marker; preserve all raw levels.
-    expect(await sidebar.locator('[data-outline-level]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-outline-level')))).toEqual(levels);
+    expect(levels).toEqual(expected.headingLevels!.flat());
+    expect(await sidebar.locator('[data-outline-level]').evaluateAll(nodes => nodes.map(node => Number(node.getAttribute('data-outline-level'))))).toEqual(expected.outlineDepths!.flat());
     await expect(sidebar.getByRole('button', { name: '一、先理解：Chapter 3 究竟在研究什么？', exact: true })).toHaveAttribute('data-outline-level', '2');
 
 });
@@ -27,25 +27,26 @@ test('F12 depth filtering preserves search, no-heading fallback, selection and e
     const sidebar = page.locator(sidebarSelector);
     await sidebar.getByRole('button', { name: 'Orbit Beta', exact: true }).click();
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-    await sidebar.getByLabel('Heading depth').selectOption('1');
+    await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('1');
     await sidebar.getByRole('button', { name: 'Back to outline' }).click();
-    await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
-    await expect(sidebar.locator('[data-block-key]').first().locator('.scroll-pro-subheading')).toHaveCount(0);
+    await expect(sidebar.locator('[data-outline-level]')).toHaveText(['Orbit Alpha']);
+    await expect(sidebar.locator('[data-block-key]').first().locator('.scroll-pro-subheading')).toHaveCount(1);
     await expect(sidebar.locator('[data-block-key]').last().locator('.scroll-pro-subheading')).toHaveCount(1);
-    await expect(sidebar.locator('[data-block-key]').first()).toHaveAttribute('aria-selected', 'true');
+    await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveClass(/is-focused/);
     await sidebar.getByPlaceholder('Filter…').fill('Orbit Beta');
+    // The captured prompt also mentions Orbit Beta, so its visible root remains.
     await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
-    await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
+    await expect(sidebar.locator('[data-outline-level]')).toHaveText(['Orbit Alpha']);
     await sidebar.getByPlaceholder('Filter…').fill('');
     for (const depth of ['4', '6']) {
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-        await sidebar.getByLabel('Heading depth').selectOption(depth);
+        await sidebar.getByLabel('Outline depth', { exact: true }).selectOption(depth);
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(2);
     }
-    // Existing export flow serializes the original DOM, including hidden H2/H3.
+    // Export retains the original H2/H3 markers, including the hidden child.
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-    await sidebar.getByLabel('Heading depth').selectOption('1');
+    await sidebar.getByLabel('Outline depth', { exact: true }).selectOption('1');
     await sidebar.getByRole('button', { name: 'Back to outline' }).click();
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
     await page.getByRole('button', { name: /JSON/ }).click();
@@ -60,6 +61,47 @@ test('F12 depth filtering preserves search, no-heading fallback, selection and e
     const exported = JSON.parse(body);
     expect(exported.turns[0].response).toContain('## Orbit Alpha');
     expect(exported.turns[0].response).toContain('### Orbit Beta');
+});
+
+test('F12 outline depth help shows a tooltip on hover and keyboard focus', async ({ extensionContext, extensionPage: page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await loadScenario(extensionContext, page, 'current-turn-unit');
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const sidebar = page.locator(sidebarSelector);
+    await sidebar.getByRole('button', { name: 'Outline settings' }).click();
+    const help = sidebar.getByRole('button', { name: 'About outline depth' });
+    const tooltip = sidebar.getByRole('tooltip');
+    const helpText = 'Controls how many heading levels appear in each response.';
+    await expect(help).toHaveCSS('cursor', 'default');
+    await expect(help).not.toHaveAttribute('title');
+    await expect(tooltip).toHaveCount(0);
+    await help.hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(helpText);
+    await tooltip.hover();
+    await expect(tooltip).toBeVisible();
+    await sidebar.getByRole('heading', { name: 'Settings', exact: true }).hover();
+    await expect(tooltip).toHaveCount(0);
+    await help.focus();
+    await expect(tooltip).toBeVisible();
+    await expect(help).toHaveAccessibleDescription(helpText);
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toHaveCount(0);
+    await expect(help).toBeFocused();
+    await expect(sidebar.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await sidebar.getByRole('button', { name: 'Back to outline' }).focus();
+
+    for (const width of [320, 214]) {
+        await dragOutlineWidth(page, width);
+        await help.hover();
+        await expect(tooltip).toBeVisible();
+        const bounds = (await sidebar.boundingBox())!;
+        const bubble = (await tooltip.boundingBox())!;
+        expect(bubble.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(bubble.x + bubble.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        await sidebar.getByRole('heading', { name: 'Settings', exact: true }).hover();
+    }
+    await expect(sidebar.getByLabel('Outline depth', { exact: true })).toHaveValue('4');
 });
 
 test('F12 settings view preserves outline state and applies appearance preferences', async ({ extensionContext, extensionPage: page }) => {
@@ -155,7 +197,7 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await loadScenario(extensionContext, page, 'current-turn-unit');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     await page.getByRole('button', { name: 'Outline settings' }).click();
-    await page.getByLabel('Heading depth').selectOption('6');
+    await page.getByLabel('Outline depth', { exact: true }).selectOption('6');
     await dragOutlineWidth(page, 357);
     await page.getByRole('button', { name: 'Light', exact: true }).click();
     await page.getByRole('button', { name: 'Purple', exact: true }).click();
@@ -166,21 +208,21 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await second.goto(page.url());
     await second.getByRole('button', { name: 'Toggle outline' }).click();
     await second.getByRole('button', { name: 'Outline settings' }).click();
-    await expect(second.getByLabel('Heading depth')).toHaveValue('6');
+    await expect(second.getByLabel('Outline depth', { exact: true })).toHaveValue('6');
     await expect(second.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '357');
     await expect(second.getByRole('button', { name: 'Light', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(second.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'false');
     await expect(second.getByLabel('Outline text size')).toHaveValue('15');
     await expect(second.getByLabel('Custom theme color hex')).toHaveValue('#0EA5E9');
     await expect(second.getByLabel('Background color hex')).toHaveValue('#FFF7ED');
-    await second.getByLabel('Heading depth').selectOption('1');
+    await second.getByLabel('Outline depth', { exact: true }).selectOption('1');
     await dragOutlineWidth(second, 290);
     await second.getByRole('button', { name: 'Dark', exact: true }).click();
     await second.getByLabel('Outline text size').fill('16');
     await second.getByLabel('Custom theme color hex').fill('#14B8A6');
     await second.getByLabel('Background color hex').fill('#111827');
     await second.getByRole('switch', { name: 'Hover mode' }).click();
-    await expect(page.getByLabel('Heading depth')).toHaveValue('1');
+    await expect(page.getByLabel('Outline depth', { exact: true })).toHaveValue('1');
     await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '290');
     await expect(page.getByRole('switch', { name: 'Hover mode' })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -190,7 +232,7 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await page.reload();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+;' : 'Control+;');
     await page.getByRole('button', { name: 'Outline settings' }).click();
-    await expect(page.getByLabel('Heading depth')).toHaveValue('1');
+    await expect(page.getByLabel('Outline depth', { exact: true })).toHaveValue('1');
     await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '290');
     await expect(page.getByRole('switch', { name: 'Hover mode' })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -229,7 +271,8 @@ test('F05 streamed chapter text recomputes display levels without modifying host
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     // Synthetic text updates on captured DOM; this tests reactivity, not new DOM coverage.
     await page.locator('[data-markdown-text-style] h2').evaluate(node => { node.firstChild!.textContent = '一、Overview'; });
-    await expect(page.locator(sidebarSelector).getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '2');
+    await expect(page.locator(sidebarSelector).getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '1');
+    await expect(page.locator(sidebarSelector).getByRole('button', { name: 'Orbit Beta', exact: true })).toHaveAttribute('data-outline-level', '2');
     await page.locator('[data-markdown-text-style] h3').evaluate(node => { node.firstChild!.textContent = '二、Summary'; });
     await expect(page.locator(sidebarSelector).getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '1');
     await expect(page.locator(sidebarSelector).getByRole('button', { name: '二、Summary' })).toHaveAttribute('data-outline-level', '1');

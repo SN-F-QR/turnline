@@ -16,6 +16,8 @@ type SnapshotExpected = {
   turnKeys: string[];
   contentUnits: number;
   headingCount: number;
+  headingLevels?: number[][];
+  outlineDepths?: number[][];
   firstPrompt?: string;
   firstHeading?: string;
   lastHeading?: string;

@@ -29,6 +29,18 @@ test('shared exports use full cached Markdown when DOM has been recycled', () =>
     assert.deepEqual(exported[0], { prompt: undefined, answer: '## Original\n\n**Full** body', headings: ['Original'], kind: 'assistant', title: 'Original' });
 });
 
+test('outline depths survive answer eviction and refresh when the same answer remounts', () => {
+    const headings = (levels: number[]) => levels.map(level => ({ innerText: `Level ${level}`, tagName: `H${level}`, element: {} as HTMLElement }));
+    const original = { ...turn('a'), headings: headings([2, 4, 5]) };
+    const retained = mergeDiscoveredTurns([original], [turn('b')]);
+    assert.deepEqual(buildConversationBlocks(retained).map(block => block.headingDepths), [[1, 2, 3], []]);
+    const replacement = { ...turn('a'), headings: headings([4, 4, 6]) };
+    const updated = buildConversationBlocks(mergeDiscoveredTurns(retained, [replacement]));
+    assert.deepEqual(updated[0].headingDepths, [1, 1, 2]);
+    assert.equal(updated[0].headings, replacement.headings);
+    assert.deepEqual(original.headings.map(heading => heading.tagName), ['H2', 'H4', 'H5']);
+});
+
 test('fully replaced windows use the scan direction when no overlap remains', () => {
     const newer = ['c', 'd'].map(id => turn(id));
     const older = ['a', 'b'].map(id => turn(id));
