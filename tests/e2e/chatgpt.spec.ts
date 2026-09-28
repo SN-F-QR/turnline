@@ -106,7 +106,7 @@ test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]'
   await expect(blocks).toHaveCount(expected.prompts.length);
   await expect(blocks.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
   for (const heading of expected.headings) {
-    await expect(sidebar.getByRole('button', { name: heading })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: heading, exact: true })).toBeVisible();
   }
   await expect(sidebar.locator('.scroll-pro-subheading')).toHaveCount(3);
   for (const text of expected.absentText ?? []) {
@@ -116,7 +116,7 @@ test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]'
   await filter.fill('green satellite');
   await expect(blocks).toHaveCount(1);
   await filter.clear();
-  await sidebar.getByRole('button', { name: 'Orbit Alpha' }).click();
+  await sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true }).click();
   await expect.poll(() => extensionPage.locator('[data-markdown-text-style] h2').first().evaluate((heading) => {
     const target = heading.getBoundingClientRect();
     const scroller = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
@@ -173,7 +173,7 @@ for (const layout of ['current', 'legacy', 'signed-in'] as const) {
     }, layout);
     const sidebar = await openOutline(extensionPage);
     for (const title of ['Product comparison', 'Recommendations', 'Concentration', 'Ordinary nested heading']) {
-      await expect(sidebar.getByRole('button', { name: title, exact: true })).toBeVisible();
+      await expect(sidebar.getByRole('button', { name: title, exact: true }).and(sidebar.locator('.scroll-pro-subheading'))).toBeVisible();
     }
     for (const title of ['Example toothpaste brand', 'Card details', '1,000–1,150 ppm']) {
       await expect(sidebar.getByRole('button', { name: title, exact: true })).toHaveCount(0);
@@ -185,13 +185,13 @@ for (const layout of ['current', 'legacy', 'signed-in'] as const) {
 test('F06 text-node streaming updates the current outline [P4]', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
   await extensionPage.evaluate(() => {
     const heading = document.querySelector<HTMLElement>('[data-markdown-text-style] h2')!;
     heading.firstChild!.textContent = 'Orbit Updated';
   });
   await expect(sidebar.getByRole('button', { name: 'Orbit Updated' })).toBeVisible();
-  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toHaveCount(0);
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
 });
 
@@ -222,7 +222,7 @@ test('F02 history keeps one navigable turn when a fallback search key is replace
   });
   await expect(sidebar.getByRole('button', { name: 'Orbit Resolved' })).toBeVisible();
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
-  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha' })).toHaveCount(0);
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
   await sidebar.getByRole('button', { name: 'Orbit Resolved' }).click();
   await expect.poll(() => extensionPage.getByRole('heading', { name: 'Orbit Resolved' }).evaluate(heading => {
     const target = heading.getBoundingClientRect();

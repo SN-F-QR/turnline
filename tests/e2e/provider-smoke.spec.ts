@@ -1,18 +1,24 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect } from './extension.fixture';
+
+async function loadProvider(context: BrowserContext, page: Page, provider: string, url: string) {
+    const html = await readFile(resolve('tests/fixtures', provider, 'basic.html'), 'utf8');
+    await context.route('**/*', async route => {
+        if (route.request().url() === url) await route.fulfill({ contentType: 'text/html', body: html });
+        else if (/^https?:/.test(route.request().url())) await route.abort();
+        else await route.continue();
+    });
+    await page.goto(url);
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    return page.getByRole('complementary', { name: 'Turnline outline' });
+}
 
 for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'], ['gemini', 'https://gemini.google.com/app/fixture-basic']]) {
     test(`F12 ${provider} shared settings compatibility (synthetic fixture)`, async ({ extensionContext, extensionPage: page }) => {
-        const html = await readFile(resolve('tests/fixtures', provider, 'basic.html'), 'utf8');
-        await extensionContext.route('**/*', async route => {
-            if (route.request().url() === url) await route.fulfill({ contentType: 'text/html', body: html });
-            else if (/^https?:/.test(route.request().url())) await route.abort();
-            else await route.continue();
-        });
-        await page.goto(url);
-        await page.getByRole('button', { name: 'Toggle outline' }).click();
-        const sidebar = page.getByRole('complementary');
+        const sidebar = await loadProvider(extensionContext, page, provider, url);
+        await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toHaveCount(0);
         const filter = sidebar.getByPlaceholder('Filter…');
@@ -20,11 +26,13 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await expect(sidebar.locator('[data-outline-level]')).toHaveText(['Details']);
         await filter.fill('Compatibility answer');
         await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+        await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
         await filter.fill('Compatibility prompt');
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await filter.clear();
         await sidebar.getByRole('button', { name: 'Collapse all turns' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
+        await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
         await sidebar.getByRole('button', { name: 'Expand all turns' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         // ChatGPT's Chinese chapter inference must not leak into other adapters.
@@ -38,6 +46,30 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar).toBeVisible();
+    });
+
+    test(`${provider} message count follows added and removed page content while filtering`, async ({ extensionContext, extensionPage: page }) => {
+        const sidebar = await loadProvider(extensionContext, page, provider, url);
+        const status = sidebar.getByRole('status');
+        await expect(status).toHaveText('2 messages discovered');
+        await sidebar.getByPlaceholder('Filter…').fill('No matching prompt');
+        await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+        await page.locator('main > div').evaluate(container => {
+            const copies = Array.from(container.children).map(node => {
+                const copy = node.cloneNode(true) as HTMLElement;
+                if (copy.hasAttribute('data-turn-id')) copy.setAttribute('data-turn-id', `${copy.getAttribute('data-turn-id')}-added`);
+                copy.dataset.countTest = 'added';
+                return copy;
+            });
+            container.append(...copies);
+        });
+        await expect(status).toHaveText('4 messages discovered');
+        await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+        await page.locator('[data-count-test]').evaluateAll(nodes => nodes.forEach(node => node.remove()));
+        await expect(status).toHaveText('2 messages discovered');
+        await page.locator('main > div').evaluate(container => container.replaceChildren());
+        await expect(status).toHaveText('0 messages discovered');
+        await expect(sidebar.getByRole('button', { name: /^(Refresh history|Stop refreshing history)$/ })).toHaveCount(0);
     });
 }
 

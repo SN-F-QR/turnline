@@ -37,11 +37,13 @@ test('bulk collapse includes filtered turns, preserves host position and skips h
 
     const first = sidebar.locator('[data-block-key]').first();
     const last = sidebar.locator('[data-block-key]').last();
-    await first.focus();
+    await first.getByRole('button', { name: 'Expand answer outline' }).focus();
     await page.keyboard.press('Tab');
-    await expect(first.getByRole('button', { name: 'Expand answer outline' })).toBeFocused();
+    await expect(first.locator('.scroll-pro-item-title')).toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(last).toBeFocused();
+    await expect(last.getByRole('button', { name: 'Expand answer outline' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(last.locator('.scroll-pro-item-title')).toBeFocused();
     await first.getByRole('button', { name: 'Expand answer outline' }).click();
     await expect(first.locator('.scroll-pro-subheading')).toHaveCount(2);
     await expect(last.locator('.scroll-pro-subheading')).toHaveCount(0);

@@ -19,7 +19,7 @@ test('reading follows a short final section at the bottom without changing the f
 
     await sidebar.getByRole('button', { name: 'Collapse all turns', exact: true }).click();
     await expect(blocks.last()).toHaveAttribute('aria-current', 'location');
-    await blocks.first().click();
+    await blocks.first().locator('.scroll-pro-item-title').click();
     await expect(blocks.first()).toHaveAttribute('aria-current', 'location');
     await expect.poll(() => page.locator('[data-user-message-bubble]').first().evaluate(node => {
         const viewport = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();

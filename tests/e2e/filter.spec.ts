@@ -31,9 +31,9 @@ test('filtering a section by typing and pasting keeps its original navigation in
     expect(await page.locator('.thread-scroll-container').evaluate(scroller => scroller.scrollTop)).toBe(position);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
 
-    await blocks.first().focus();
+    await sidebar.getByRole('button', { name: 'Collapse answer outline' }).focus();
     await page.keyboard.press('Tab');
-    await expect(sidebar.getByRole('button', { name: 'Collapse answer outline' })).toBeFocused();
+    await expect(blocks.first().locator('.scroll-pro-item-title')).toBeFocused();
     await page.keyboard.press('Tab');
     const section = sidebar.getByRole('button', { name: 'Orbit Beta', exact: true });
     await expect(section).toBeFocused();

@@ -754,12 +754,12 @@
   border-radius: 6px;
   border: none;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   outline: none;
 }
 
 /* Focus marks the navigable row, never the whole conversation block. */
-.scroll-pro-sidebar-item:focus-visible > .scroll-pro-item-body > .scroll-pro-item-header,
+.scroll-pro-item-title:focus-visible,
 .scroll-pro-subheading:focus-visible {
   outline: 1px solid var(--text-secondary);
   outline-offset: 2px;
@@ -806,7 +806,6 @@
   transition: color 120ms ease, background 120ms ease;
 }
 
-.scroll-pro-item-header:hover .scroll-pro-collapse-btn,
 .scroll-pro-sidebar-item.is-reading .scroll-pro-collapse-btn {
   color: var(--text-secondary);
 }
@@ -848,11 +847,15 @@
 }
 
 .scroll-pro-item-title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   padding: 0;
-  border-radius: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   font-size: var(--outline-title-size, 13px);
   font-weight: 500;
   line-height: 1.4;
@@ -894,7 +897,7 @@
 }
 
 /* Hover is a quiet, temporary cue; reading position owns the text emphasis. */
-.scroll-pro-item-header:hover,
+.scroll-pro-item-title:hover,
 .scroll-pro-subheading:hover {
   background: var(--hover-overlay);
 }

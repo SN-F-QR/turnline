@@ -1440,7 +1440,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     </div>
 
                     <div className="scroll-pro-history-status">
-                        {providerName === 'chatgpt' ? <span role="status">{describeHistory(history, turns.length)}</span> : <span />}
+                        <span role="status">{describeHistory(history, turns.length)}</span>
                         <button
                             type="button"
                             className="scroll-pro-history-control"
@@ -1494,11 +1494,6 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                             itemRefs.current.delete(block.key);
                                         }
                                     }}
-                                    onClick={() => {
-                                        if (contextMenu) return;
-                                        if (focusIdx >= 0) setFocusedIndex(focusIdx);
-                                        navigate(block.prompt || block.answer);
-                                    }}
                                     onContextMenu={(e) => {
                                         e.preventDefault();
                                         if (focusIdx >= 0) setFocusedIndex(focusIdx);
@@ -1510,9 +1505,6 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                     }}
                                     className={`scroll-pro-sidebar-item ${focusedIndex === focusIdx ? 'is-focused' : ''} ${activeKey === block.key ? 'is-reading' : ''}`}
                                     aria-current={activeKey === block.key ? 'location' : undefined}
-                                    tabIndex={0}
-                                    onFocus={(e) => { if (e.target === e.currentTarget) setFocusedIndex(focusIdx); }}
-                                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); navigate(block.prompt || block.answer); } }}
                                     aria-selected={focusedIndex === focusIdx}
                                 >
                                     <div className="scroll-pro-item-body">
@@ -1554,9 +1546,18 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                             ) : (
                                                 <span className="scroll-pro-collapse-spacer" aria-hidden="true" />
                                             )}
-                                            <p className="scroll-pro-item-title">
+                                            <button
+                                                type="button"
+                                                className="scroll-pro-item-title"
+                                                onFocus={() => setFocusedIndex(focusIdx)}
+                                                onClick={() => {
+                                                    if (contextMenu) return;
+                                                    if (focusIdx >= 0) setFocusedIndex(focusIdx);
+                                                    navigate(block.prompt || block.answer);
+                                                }}
+                                            >
                                                 {block.title || '…'}
-                                            </p>
+                                            </button>
                                         </div>
                                         {block.answer && !isCollapsed && (
                                             <div className="scroll-pro-subheading-list">
