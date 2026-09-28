@@ -116,6 +116,7 @@ const App = () => {
             isOpen={isSidebarOpen}
             isPaused={false}
             onToggle={toggleSidebar}
+            onOpenChange={setIsSidebarOpen}
             settings={outlineSettings}
           />
         </ErrorBoundary>

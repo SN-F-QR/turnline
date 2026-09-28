@@ -345,7 +345,7 @@ test('F13 assistant-only output omits a fabricated user [P3 synthetic state]', a
   const sidebar = await openOutline(extensionPage);
   const blocks = sidebar.locator('[data-block-key]');
   await expect(blocks).toHaveCount(2);
-  await sidebar.getByRole('button', { name: 'Prompts' }).click();
+  await sidebar.getByRole('button', { name: 'Collapse all turns' }).click();
   await expect(blocks.locator('.scroll-pro-item-title').first()).toHaveText('Orbit Alpha');
   await blocks.first().click({ button: 'right' });
   await expect(extensionPage.getByRole('button', { name: 'Copy prompt' })).toBeDisabled();

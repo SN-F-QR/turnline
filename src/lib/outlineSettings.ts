@@ -2,6 +2,10 @@ import type { Heading } from '../types/index.ts';
 
 export const HEADING_DEPTH_KEY = 'scroll-pro-heading-depth';
 export const SIDEBAR_WIDTH_KEY = 'scroll-pro-sidebar-width';
+export const HOVER_MODE_KEY = 'scroll-pro-hover-mode';
+export const SIDEBAR_MIN_WIDTH = 214;
+export const SIDEBAR_MAX_WIDTH = 420;
+export const SIDEBAR_DEFAULT_WIDTH = 320;
 export const THEME_MODE_KEY = 'scroll-pro-theme-mode';
 export const ACCENT_PRESET_KEY = 'scroll-pro-accent-preset';
 export const OUTLINE_FONT_SIZE_KEY = 'scroll-pro-outline-font-size';
@@ -19,9 +23,10 @@ const LEGACY_FONT_SIZES: Record<string, number> = { small: 12, default: 13, larg
 export const validDepth = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 6;
 export const normalizeDepth = (value: unknown) => validDepth(value) ? value : 4;
 export const normalizeWidth = (value: unknown) => {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 320 || value > 640) return 420;
-    return [320, 420, 640].reduce((nearest, preset) => Math.abs(preset - value) < Math.abs(nearest - value) ? preset : nearest);
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return SIDEBAR_DEFAULT_WIDTH;
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
 };
+export const normalizeHoverMode = (value: unknown) => value === true;
 export const normalizeThemeMode = (value: unknown): ThemeMode => THEME_MODES.includes(value as ThemeMode) ? value as ThemeMode : 'system';
 export const normalizeAccentPreset = (value: unknown): AccentPreset => {
     if (ACCENT_PRESETS.includes(value as AccentPreset)) return value as AccentPreset;

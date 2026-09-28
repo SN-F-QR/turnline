@@ -14,8 +14,10 @@ import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
-import { getHeadingLevel, getOutlineWidth } from '../lib/outlineSettings';
+import { getHeadingLevel, getOutlineWidth, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '../lib/outlineSettings';
 import type { OutlineSettingsController } from '../hooks/useOutlineSettings';
+import { useSidebarResize } from '../hooks/useSidebarResize';
+import { useSidebarHover } from '../hooks/useSidebarHover';
 import SettingsPanel from './SettingsPanel';
 import DOMPurify from 'dompurify';
 const CONTEXT_HINT_KEY = 'scroll-pro-context-hint-seen';
@@ -143,7 +145,7 @@ const loadSidebarPosition = (storageKey: string): SidebarPosition => {
     }
 };
 
-const getEstimatedSidebarSize = (preferredWidth = 420) => {
+const getEstimatedSidebarSize = (preferredWidth = SIDEBAR_DEFAULT_WIDTH) => {
     if (typeof window === 'undefined') {
         return { width: preferredWidth, height: 480 };
     }
@@ -154,7 +156,7 @@ const getEstimatedSidebarSize = (preferredWidth = 420) => {
     return { width, height };
 };
 
-const getSidebarOpenDirection = (pos: SidebarPosition, preferredWidth = 420): SidebarOpenDirection => {
+const getSidebarOpenDirection = (pos: SidebarPosition, preferredWidth = SIDEBAR_DEFAULT_WIDTH): SidebarOpenDirection => {
     if (typeof window === 'undefined') {
         return { x: 'right', y: 'down' };
     }
@@ -226,11 +228,11 @@ type SidebarProps = {
     isOpen: boolean;
     isPaused: boolean;
     onToggle: () => void;
+    onOpenChange: (open: boolean) => void;
     settings: OutlineSettingsController;
 };
 
-export default function Sidebar({ turns, history, discoverHistory, cancelHistory, navigateToTurn, providerName, container, isOpen, isPaused, onToggle, settings }: SidebarProps) {
-    const [viewLevel, setViewLevel] = useState<1 | 2>(2); // 1=Prompts, 2=All
+export default function Sidebar({ turns, history, discoverHistory, cancelHistory, navigateToTurn, providerName, container, isOpen, isPaused, onToggle, onOpenChange, settings }: SidebarProps) {
     const { depth, width } = settings;
     const widthRef = useRef(width);
     widthRef.current = width;
@@ -267,6 +269,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     const storageKey = getSidebarStorageKey(providerName);
     const [sidebarPosition, setSidebarPosition] = useState<SidebarPosition>(() => loadSidebarPosition(storageKey));
     const [isDragging, setIsDragging] = useState(false);
+    const [isTogglePressed, setIsTogglePressed] = useState(false);
     const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
     const sidebarShellRef = useRef<HTMLDivElement | null>(null);
     const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -286,6 +289,21 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     const suppressClickRef = useRef(false);
     const dragBodyStyleRef = useRef<{ userSelect: string; cursor: string } | null>(null);
     const ignoreNextPositionWriteRef = useRef(false);
+    const resize = useSidebarResize({
+        isOpen,
+        enabled: !isDragging && !isTogglePressed,
+        width,
+        direction: getSidebarOpenDirection(sidebarPosition, width),
+        updateWidth: settings.updateWidth,
+    });
+    const hover = useSidebarHover({
+        enabled: settings.hoverMode,
+        isOpen,
+        paused: isTogglePressed || isDragging || resize.isResizing || showCaptureConsent,
+        hasMenu: Boolean(contextMenu || exportFormatMenu || copyFormatMenu),
+        shellRef: sidebarShellRef,
+        onOpenChange,
+    });
 
     const turnsRef = useRef(turns);
     useEffect(() => { turnsRef.current = turns; }, [turns]);
@@ -382,6 +400,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         const wasDragging = dragStateRef.current.isDragging;
         dragStateRef.current.isDragging = false;
         dragStateRef.current.pointerId = null;
+        setIsTogglePressed(false);
 
         if (wasDragging) {
             setIsDragging(false);
@@ -401,8 +420,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     }, [handleTogglePointerMove, setDragStyles]);
 
     const handleTogglePointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-        if (event.button !== 0) return;
+        if (event.button !== 0 || resize.isResizing) return;
         event.stopPropagation();
+        setIsTogglePressed(true);
 
         if (longPressTimerRef.current) {
             window.clearTimeout(longPressTimerRef.current);
@@ -424,7 +444,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         window.addEventListener('pointermove', handleTogglePointerMove, true);
         window.addEventListener('pointerup', handleTogglePointerUp, true);
         window.addEventListener('pointercancel', handleTogglePointerUp, true);
-    }, [beginDrag, handleTogglePointerMove, handleTogglePointerUp]);
+    }, [beginDrag, handleTogglePointerMove, handleTogglePointerUp, resize.isResizing]);
 
     const handleToggleClick = useCallback(() => {
         if (suppressClickRef.current) {
@@ -477,6 +497,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         dragPositionRef.current = null;
         dragOpenDirectionRef.current = null;
         dragStateRef.current.isDragging = false;
+        setIsTogglePressed(false);
         setIsDragging(false);
         setDragStyles(false);
     }, [storageKey, setDragStyles]);
@@ -509,6 +530,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             }
             dragStateRef.current.pointerId = null;
             dragStateRef.current.isDragging = false;
+            setIsTogglePressed(false);
             dragPositionRef.current = null;
             dragOpenDirectionRef.current = null;
             setIsDragging(false);
@@ -590,10 +612,13 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     }, [copyWithMarkdown]);
 
     const blocks: Block[] = useMemo(() => buildConversationBlocks(turns), [turns]);
+    const collapsibleKeys = useMemo(() => blocks.filter(block => block.answer &&
+        (block.headings.length > 0 || !!block.answer.text)
+    ).map(block => block.key), [blocks]);
+    const allCollapsed = collapsibleKeys.length > 0 && collapsibleKeys.every(key => collapsedBlocks.has(key));
 
     const filteredBlocks = useMemo(() => {
         const term = search.toLowerCase().trim();
-        const showHeadings = viewLevel === 2;
         return blocks.filter((block) => {
             const promptText = (block.prompt?.text || block.title).toLowerCase();
             const answerText = (block.answer?.text || '').toLowerCase();
@@ -604,22 +629,21 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                 answerText.includes(term) ||
                 (block.answer?.contextLabel || '').toLowerCase().includes(term) ||
                 (block.answer?.timeLabel || '').toLowerCase().includes(term) ||
-                (showHeadings && headingsText.includes(term))
+                headingsText.includes(term)
             );
         });
-    }, [blocks, search, viewLevel]);
+    }, [blocks, search]);
 
     type FocusItem =
         | { key: string; kind: 'block'; block: Block }
         | { key: string; kind: 'heading'; block: Block; heading?: Turn['headings'][number] };
 
     const focusableItems: FocusItem[] = useMemo(() => {
-        const showHeadings = viewLevel === 2;
         const items: FocusItem[] = [];
 
         filteredBlocks.forEach((block) => {
             items.push({ key: block.key, kind: 'block', block });
-            if (showHeadings && block.answer && !collapsedBlocks.has(block.key)) {
+            if (block.answer && !collapsedBlocks.has(block.key)) {
                 if (block.headings.length > 0) {
                     block.headings.forEach((h, idx) => {
                         if (getHeadingLevel(h) > depth) return;
@@ -631,13 +655,30 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             }
         });
         return items;
-    }, [filteredBlocks, viewLevel, depth, collapsedBlocks]);
+    }, [filteredBlocks, depth, collapsedBlocks]);
 
     const focusIndexByKey = useMemo(() => {
         const map = new Map<string, number>();
         focusableItems.forEach((item, idx) => map.set(item.key, idx));
         return map;
     }, [focusableItems]);
+
+    const collapseReadingHeading = (keys: readonly string[]) => {
+        const item = focusableItems.find(item => item.key === activeKey);
+        if (item?.kind === 'heading' && keys.includes(item.block.key)) setActiveKey(item.block.key);
+    };
+
+    const toggleAllCollapsed = () => {
+        setCollapsedBlocks(previous => {
+            const next = new Set(previous);
+            collapsibleKeys.forEach(key => {
+                if (allCollapsed) next.delete(key);
+                else next.add(key);
+            });
+            return next;
+        });
+        if (!allCollapsed) collapseReadingHeading(collapsibleKeys);
+    };
 
     const getCurrentExportBlocks = useCallback(() => toExportBlocks(blocks), [blocks]);
     const coverage = useMemo(() => providerName === 'chatgpt' ? getHistoryCoverage(history, turns.length) : { complete: null, scanStatus: 'not-scanned', description: 'Detected messages' }, [providerName, history, turns.length]);
@@ -820,7 +861,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             }
             const block = filteredBlocks.find(item => item.prompt?.id === turn?.id || item.answer?.id === turn?.id);
             let key = block?.key || null;
-            if (block && turn?.id === block.answer?.id && viewLevel === 2 && !collapsedBlocks.has(block.key)) {
+            if (block && turn?.id === block.answer?.id && !collapsedBlocks.has(block.key)) {
                 let index = -1;
                 block.headings.forEach((heading, i) => {
                     if (heading.element.isConnected && heading.element.getClientRects().length && heading.element.getBoundingClientRect().top <= line) index = i;
@@ -854,7 +895,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             window.removeEventListener('scroll', schedule, true);
             window.removeEventListener('resize', schedule);
         };
-    }, [container, isOpen, isPaused, turns, filteredBlocks, viewLevel, depth, history.status, collapsedBlocks]);
+    }, [container, isOpen, isPaused, turns, filteredBlocks, depth, history.status, collapsedBlocks]);
 
     const previousFocusItems = useRef(focusableItems);
     useEffect(() => {
@@ -1094,6 +1135,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         return (
             <div
                 className="scroll-pro-context-menu"
+                data-hover-region
+                onPointerEnter={hover.onPointerEnter}
+                onPointerLeave={hover.onPointerLeave}
                 style={{ top: contextMenu.y, left: contextMenu.x }}
                 ref={contextMenuRef}
                 onKeyDown={(event) => {
@@ -1177,6 +1221,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         return (
             <div
                 className="scroll-pro-context-menu"
+                data-hover-region
+                onPointerEnter={hover.onPointerEnter}
+                onPointerLeave={hover.onPointerLeave}
                 style={{ top: adjustedY, left: adjustedX }}
                 ref={exportFormatMenuRef}
                 onKeyDown={(event) => {
@@ -1230,6 +1277,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         return (
             <div
                 className="scroll-pro-context-menu"
+                data-hover-region
+                onPointerEnter={hover.onPointerEnter}
+                onPointerLeave={hover.onPointerLeave}
                 style={{ top: adjustedY, left: adjustedX }}
                 ref={copyFormatMenuRef}
                 onKeyDown={(event) => {
@@ -1264,17 +1314,18 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         : sidebarPosition;
     const effectiveDirection = isDragging && dragOpenDirectionRef.current
         ? dragOpenDirectionRef.current
-        : getSidebarOpenDirection(effectivePosition, width);
+        : resize.preview?.direction ?? getSidebarOpenDirection(effectivePosition, width);
+    const effectiveWidth = resize.preview?.width ?? width;
 
     return (
         <div
             ref={sidebarShellRef}
-            className={`scroll-pro-sidebar-shell ${isOpen ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''}`}
+            className={`scroll-pro-sidebar-shell ${isOpen ? 'is-open' : ''} ${isDragging ? 'is-dragging' : ''} ${resize.isResizing ? 'is-resizing' : ''}`}
             data-open-x={effectiveDirection.x}
             data-open-y={effectiveDirection.y}
             style={{
                 ['--sidebar-line-clamp' as string]: lineClamp,
-                ['--sidebar-width' as string]: `${getOutlineWidth(width, window.innerWidth, effectivePosition.x, effectiveDirection.x)}px`,
+                ['--sidebar-width' as string]: `${getOutlineWidth(effectiveWidth, window.innerWidth, effectivePosition.x, effectiveDirection.x)}px`,
                 ['--sidebar-x' as string]: `${effectivePosition.x}px`,
                 ['--sidebar-y' as string]: `${effectivePosition.y}px`,
             }}
@@ -1283,8 +1334,12 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                 ref={toggleButtonRef}
                 onClick={handleToggleClick}
                 onPointerDown={handleTogglePointerDown}
+                data-hover-region
+                onPointerEnter={hover.onToggleEnter}
+                onPointerLeave={hover.onPointerLeave}
                 className="scroll-pro-toggle-icon"
                 aria-label="Toggle outline"
+                aria-expanded={isOpen}
                 title="Toggle outline (press and hold to move)"
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1297,12 +1352,28 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             {isOpen && (
                 <div
                     className="scroll-pro-sidebar"
+                    data-hover-region
+                    onPointerEnter={hover.onPointerEnter}
+                    onPointerLeave={hover.onPointerLeave}
                     role="complementary"
                     aria-label="Scroll Pro outline"
                     onMouseEnter={() => { pointerInSidebar.current = true; }}
                     onMouseLeave={() => { pointerInSidebar.current = false; }}
 
                 >
+                    <div
+                        className="scroll-pro-resize-handle"
+                        role="separator"
+                        aria-label="Outline width"
+                        aria-orientation="vertical"
+                        aria-valuemin={SIDEBAR_MIN_WIDTH}
+                        aria-valuemax={SIDEBAR_MAX_WIDTH}
+                        aria-valuenow={effectiveWidth}
+                        tabIndex={0}
+                        onPointerDown={resize.onPointerDown}
+                        onKeyDown={resize.onKeyDown}
+                        onDoubleClick={resize.onDoubleClick}
+                    />
                     {showSettings ? (
                         <SettingsPanel
                             settings={settings}
@@ -1312,23 +1383,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                         <>
                     <div className="scroll-pro-sidebar-head">
                         <div className="scroll-pro-sidebar-row">
-                            <div className="scroll-pro-tab-group" role="group" aria-label="Outline filter">
-                                <button
-                                    onClick={() => setViewLevel(1)}
-                                    className={`scroll-pro-tab ${viewLevel === 1 ? 'is-active' : ''}`}
-                                    title="Show prompts only"
-                                >
-                                    Prompts
-                                </button>
-                                <span aria-hidden="true" className="scroll-pro-tab-sep">•</span>
-                                <button
-                                    onClick={() => setViewLevel(2)}
-                                    className={`scroll-pro-tab ${viewLevel === 2 ? 'is-active' : ''}`}
-                                    title="Show all content"
-                                >
-                                    All
-                                </button>
-                            </div>
+                            <span className="scroll-pro-outline-label">All</span>
                             <div className="scroll-pro-actions" role="group" aria-label="Chat actions">
                                 <button ref={settingsButtonRef} className="scroll-pro-action-btn" aria-label="Outline settings" aria-expanded="false" onClick={openSettings}>
                                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>
@@ -1397,16 +1452,29 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                         </div>
                     </div>
 
-                    {providerName === 'chatgpt' && <div className="scroll-pro-history-status" role="status">
-                        <span>{describeHistory(history, turns.length)}</span>
-                        {history.status === 'scanning'
+                    <div className="scroll-pro-history-status">
+                        {providerName === 'chatgpt' ? <span role="status">{describeHistory(history, turns.length)}</span> : <span />}
+                        <button
+                            type="button"
+                            className="scroll-pro-history-control"
+                            onClick={toggleAllCollapsed}
+                            disabled={collapsibleKeys.length === 0}
+                            aria-label={allCollapsed ? 'Expand all turns' : 'Collapse all turns'}
+                            title={allCollapsed ? 'Expand all turns' : 'Collapse all turns'}
+                        >
+                            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                {allCollapsed ? <><path d="m8 8 4-4 4 4" /><path d="m8 16 4 4 4-4" /></> : <><path d="m8 4 4 4 4-4" /><path d="m8 20 4-4 4 4" /></>}
+                                <path d="M5 12h14" />
+                            </svg>
+                        </button>
+                        {providerName === 'chatgpt' && (history.status === 'scanning'
                             ? <button type="button" className="scroll-pro-history-control" onClick={cancelHistory} aria-label="Stop refreshing history" title="Stop refreshing history">
                                 <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" /></svg>
                             </button>
                             : <button type="button" className="scroll-pro-history-control" onClick={() => void discoverHistory()} aria-label="Refresh history" title="Refresh history">
                                 <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.7" /><path d="M20 4v7h-7" /></svg>
-                            </button>}
-                    </div>}
+                            </button>)}
+                    </div>
                     <div
                         className="scroll-pro-sidebar-list"
                         ref={assignListRef}
@@ -1426,8 +1494,8 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                         ) : filteredBlocks.map((block) => {
                             const focusIdx = focusIndexByKey.get(block.key) ?? -1;
                             const isCollapsed = collapsedBlocks.has(block.key);
-                            const canCollapse = viewLevel === 2 && block.prompt && block.answer &&
-                                (block.headings.length > 0 ? block.headings.some(h => getHeadingLevel(h) <= depth) : !!block.answer.text);
+                            const canCollapse = block.answer &&
+                                (block.headings.length > 0 ? block.headings.some(heading => getHeadingLevel(heading) <= depth) : !!block.answer.text);
                             return (
                                 <div
                                     key={block.key}
@@ -1462,49 +1530,48 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                 >
                                     <div className="scroll-pro-item-body">
                                         <div className="scroll-pro-item-header">
-                                            {viewLevel === 2 && (
-                                                canCollapse ? (
-                                                    <button
-                                                        type="button"
-                                                        className="scroll-pro-collapse-btn"
-                                                        aria-label={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
-                                                        aria-expanded={!isCollapsed}
-                                                        title={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setFocusedIndex(focusIdx);
-                                                            setCollapsedBlocks(previous => {
-                                                                const next = new Set(previous);
-                                                                if (next.has(block.key)) next.delete(block.key);
-                                                                else next.add(block.key);
-                                                                return next;
-                                                            });
-                                                        }}
+                                            {canCollapse ? (
+                                                <button
+                                                    type="button"
+                                                    className="scroll-pro-collapse-btn"
+                                                    aria-label={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
+                                                    aria-expanded={!isCollapsed}
+                                                    title={isCollapsed ? 'Expand answer outline' : 'Collapse answer outline'}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setFocusedIndex(focusIdx);
+                                                        setCollapsedBlocks(previous => {
+                                                            const next = new Set(previous);
+                                                            if (next.has(block.key)) next.delete(block.key);
+                                                            else next.add(block.key);
+                                                            return next;
+                                                        });
+                                                        if (!isCollapsed) collapseReadingHeading([block.key]);
+                                                    }}
+                                                >
+                                                    <svg
+                                                        aria-hidden="true"
+                                                        className="scroll-pro-collapse-icon"
+                                                        width="12"
+                                                        height="12"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2.2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
                                                     >
-                                                        <svg
-                                                            aria-hidden="true"
-                                                            className="scroll-pro-collapse-icon"
-                                                            width="12"
-                                                            height="12"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2.2"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        >
-                                                            <polyline points="9 18 15 12 9 6" />
-                                                        </svg>
-                                                    </button>
-                                                ) : (
-                                                    <span className="scroll-pro-collapse-spacer" aria-hidden="true" />
-                                                )
+                                                        <polyline points="9 18 15 12 9 6" />
+                                                    </svg>
+                                                </button>
+                                            ) : (
+                                                <span className="scroll-pro-collapse-spacer" aria-hidden="true" />
                                             )}
                                             <p className="scroll-pro-item-title">
                                                 {block.title || '…'}
                                             </p>
                                         </div>
-                                        {viewLevel === 2 && block.answer && !isCollapsed && (
+                                        {block.answer && !isCollapsed && (
                                             <div className="scroll-pro-subheading-list">
                                                 {block.headings.length > 0 ? (
                                                     block.headings.map((h, i) => {

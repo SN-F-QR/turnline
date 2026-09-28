@@ -39,7 +39,9 @@ Load `dist-firefox/` as a temporary add-on (`about:debugging` > This Firefox > L
 
 **Export** — Export conversations to Markdown, PDF, plain text, or JSON. Copy and export share the same captured messages, including independent assistant replies and headings hidden by your depth setting.
 
-**Reading position** — Prompts and All track the message or heading you are reading without moving keyboard focus. A heading hidden by the depth setting falls back to its visible parent or message. Repeated clicks replace the previous navigation; a wheel, touch, or key interaction interrupts it. Reduced-motion preferences are respected.
+**Reading position** — The outline tracks the message or heading you are reading without moving keyboard focus. A heading hidden by the depth setting falls back to its visible parent or message; collapsed answers highlight their turn title. Repeated clicks replace the previous navigation; a wheel, touch, or key interaction interrupts it. Reduced-motion preferences are respected.
+
+**Collapse** — Use the icon beside history refresh to collapse or expand all discovered turns, including turns hidden by search. Individual arrows toggle each answer outline. New turns start expanded, and switching conversations resets collapsed turns.
 
 **ChatGPT history** — Opening the outline automatically searches toward older messages and retains discovered messages when ChatGPT replaces its visible DOM. Use **Stop** to cancel or **Scan history** to retry. Scrolling, touching, clicking or typing in the chat immediately takes control back from the scan; it will not pull you back afterward. The scan also visits empty message/heading placeholders and restores your reading position afterward. Clicking an evicted message attempts to load its DOM again; unavailable messages are reported.
 
@@ -47,9 +49,9 @@ After checking the oldest available messages without finding new messages or unr
 
 **Search** — Filter turns and headings by keyword.
 
-**Drag** — Reposition the toggle button anywhere on screen.
+**Drag** — Press and hold to reposition the toggle button anywhere on screen. Drag the outer sidebar edge to adjust its width from 214px to 420px (default 320px), or focus the edge and use Left/Right arrows in 10px steps. Double-click the edge to restore the default 320px width. The chosen width persists; smaller windows temporarily limit the displayed width.
 
-**Outline settings** — Open the gear button for a dedicated settings view. Choose one of six theme colors (Blue, Green, Yellow, Pink, Orange, or Purple) or enter a custom hex theme color; choose System, Light, or Dark appearance; set an optional custom hex background; enter an outline text size from 10px to 24px; choose heading depth 1–6 (default 4); and select Narrow (320px), Standard (420px, default), or Wide (640px) width. Custom backgrounds automatically use readable light or dark text. Press Escape or use the back button to return to the outline. Preferences persist locally and synchronize between tabs. Narrow windows temporarily reduce the displayed width. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
+**Outline settings** — Open the gear button for a dedicated settings view. Choose one of six theme colors (Blue, Green, Yellow, Pink, Orange, or Purple) or enter a custom hex theme color; choose System, Light, or Dark appearance; set an optional custom hex background; enter an outline text size from 10px to 24px; and choose heading depth 1–6 (default 4). Enable **Hover mode** to open the outline when the mouse enters the toggle and close it 200ms after leaving the toggle, sidebar and menus. Clicking still toggles it; dragging and dialogs pause automatic closing. Hover mode defaults off. Custom backgrounds automatically use readable light or dark text. Press Escape or use the back button to return to the outline. Preferences persist locally and synchronize between tabs. Depth only filters the outline; search, copy, and export retain the full detected content. ChatGPT supports H1–H6 with conservative numbered-chapter normalization; Claude/Gemini retain their existing H1–H4 extraction.
 
 ## Keyboard shortcuts
 

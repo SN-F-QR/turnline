@@ -254,13 +254,16 @@ export default function SettingsPanel({ settings, onBack }: SettingsPanelProps) 
                     </div>
 
                     <div className="scroll-pro-setting-row">
-                        <span className="scroll-pro-setting-label">Width</span>
+                        <span className="scroll-pro-setting-label">Hover mode</span>
                         <div className="scroll-pro-setting-control">
-                            <div className="scroll-pro-setting-options" role="group" aria-label="Outline width">
-                                {[{ label: 'Narrow', value: 320 }, { label: 'Standard', value: 420 }, { label: 'Wide', value: 640 }].map(option => (
-                                    <button key={option.value} type="button" aria-pressed={settings.width === option.value} onClick={() => settings.updateWidth(option.value)}>{option.label}</button>
-                                ))}
-                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-label="Hover mode"
+                                aria-checked={settings.hoverMode}
+                                className="scroll-pro-setting-switch"
+                                onClick={() => settings.updateHoverMode(!settings.hoverMode)}
+                            ><span aria-hidden="true" /></button>
                         </div>
                     </div>
                 </section>

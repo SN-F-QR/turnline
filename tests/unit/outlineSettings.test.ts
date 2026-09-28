@@ -8,6 +8,7 @@ import {
     normalizeAccentPreset,
     normalizeDepth,
     normalizeHexColor,
+    normalizeHoverMode,
     normalizeOutlineFontSize,
     normalizeThemeMode,
     normalizeWidth,
@@ -16,9 +17,21 @@ import {
 
 test('invalid stored preferences fall back, including nonfinite and out-of-range values', () => {
     for (const value of [undefined, null, '4', NaN, Infinity, 0, 7, 1.5]) assert.equal(normalizeDepth(value), 4);
-    for (const value of [undefined, null, '420', NaN, Infinity, 319, 641]) assert.equal(normalizeWidth(value), 420);
+    for (const value of [undefined, null, '420', NaN, Infinity, 0, -1]) assert.equal(normalizeWidth(value), 320);
     for (const value of [1, 4, 6]) assert.equal(normalizeDepth(value), value);
-    for (const value of [320, 420, 640]) assert.equal(normalizeWidth(value), value);
+    for (const value of [214, 319, 320, 357, 420]) assert.equal(normalizeWidth(value), value);
+});
+
+test('continuous width rounds pixels, clamps bounds and migrates Wide', () => {
+    assert.equal(normalizeWidth(213), 214);
+    assert.equal(normalizeWidth(421), 420);
+    assert.equal(normalizeWidth(640), 420);
+    assert.equal(normalizeWidth(321.6), 322);
+});
+
+test('hover mode defaults off and accepts only a stored boolean', () => {
+    assert.equal(normalizeHoverMode(true), true);
+    for (const value of [undefined, null, false, 'true', 1]) assert.equal(normalizeHoverMode(value), false);
 });
 
 test('appearance preferences accept known values and fall back safely', () => {
@@ -74,5 +87,7 @@ test('width respects both expansion directions without changing preference', () 
             }
         }
     }
-    assert.equal(getOutlineWidth(640, 1440, 1380, 'left'), 640);
+    assert.equal(getOutlineWidth(640, 1440, 1380, 'left'), 420);
+    assert.equal(getOutlineWidth(320, 240, 180, 'left'), 204);
+    assert.equal(getOutlineWidth(320, 240, 18, 'right'), 204);
 });

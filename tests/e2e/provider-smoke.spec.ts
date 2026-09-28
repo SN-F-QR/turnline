@@ -14,6 +14,11 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await page.getByRole('button', { name: 'Toggle outline' }).click();
         const sidebar = page.getByRole('complementary');
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
+        await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toHaveCount(0);
+        await sidebar.getByRole('button', { name: 'Collapse all turns' }).click();
+        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
+        await sidebar.getByRole('button', { name: 'Expand all turns' }).click();
+        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         // ChatGPT's Chinese chapter inference must not leak into other adapters.
         await expect(sidebar.getByRole('button', { name: '一、Overview' })).toHaveAttribute('data-outline-level', '2');
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
@@ -22,7 +27,6 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
         await sidebar.getByLabel('Heading depth').selectOption('6');
-        await sidebar.getByRole('button', { name: 'Narrow', exact: true }).click();
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar).toBeVisible();

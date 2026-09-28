@@ -17,7 +17,7 @@ test('reading follows a short final section at the bottom without changing the f
     await page.locator('.thread-scroll-container').evaluate(scroller => { scroller.scrollTop = 0; });
     await expect(blocks.last().locator('[aria-current="location"]')).toHaveCount(1);
 
-    await sidebar.getByRole('button', { name: 'Prompts', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Collapse all turns', exact: true }).click();
     await expect(blocks.last()).toHaveAttribute('aria-current', 'location');
     await blocks.first().click();
     await expect(blocks.first()).toHaveAttribute('aria-current', 'location');
@@ -48,10 +48,10 @@ test('F10 reading follows headings independently of focus and never scrolls the 
     await expect(sidebar.locator('[aria-current="location"]')).toHaveText(position.title);
     await expect(filter).toBeFocused();
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(position.top);
-    await sidebar.getByRole('button', { name: 'Prompts', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Collapse all turns', exact: true }).click();
     await expect(sidebar.locator('[data-block-key][aria-current="location"]')).toHaveCount(1);
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(position.top);
-    await sidebar.getByRole('button', { name: 'All', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Expand all turns', exact: true }).click();
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
     await sidebar.getByLabel('Heading depth').selectOption('1');
     await sidebar.getByRole('button', { name: 'Back to outline' }).click();

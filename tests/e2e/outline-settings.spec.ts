@@ -1,5 +1,6 @@
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
+import { dragOutlineWidth } from '../helpers/sidebar';
 
 const sidebarSelector = '[aria-label="Scroll Pro outline"]';
 
@@ -70,7 +71,7 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await list.evaluate(element => { element.scrollTop = 120; });
     const savedScroll = await list.evaluate(element => element.scrollTop);
-    const toolbarFontSize = await sidebar.getByRole('button', { name: 'All', exact: true }).evaluate(element => getComputedStyle(element).fontSize);
+    const toolbarFontSize = await sidebar.locator('.scroll-pro-outline-label').evaluate(element => getComputedStyle(element).fontSize);
 
     const settingsButton = sidebar.getByRole('button', { name: 'Outline settings' });
     await expect(sidebar.locator('.scroll-pro-history-status')).toBeVisible();
@@ -144,7 +145,7 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => list.evaluate(element => element.scrollTop)).toBe(savedScroll);
     await expect(firstItem.locator('.scroll-pro-item-title')).toHaveCSS('font-size', '16px');
-    await expect(sidebar.getByRole('button', { name: 'All', exact: true })).toHaveCSS('font-size', toolbarFontSize);
+    await expect(sidebar.locator('.scroll-pro-outline-label')).toHaveCSS('font-size', toolbarFontSize);
 });
 
 test('F12 settings persist across reload and synchronize a second tab', async ({ extensionContext, extensionPage: page }) => {
@@ -152,7 +153,7 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     await page.getByRole('button', { name: 'Outline settings' }).click();
     await page.getByLabel('Heading depth').selectOption('6');
-    await page.getByRole('button', { name: 'Wide', exact: true }).click();
+    await dragOutlineWidth(page, 357);
     await page.getByRole('button', { name: 'Light', exact: true }).click();
     await page.getByRole('button', { name: 'Purple', exact: true }).click();
     await page.getByLabel('Outline text size').fill('15');
@@ -163,29 +164,32 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await second.getByRole('button', { name: 'Toggle outline' }).click();
     await second.getByRole('button', { name: 'Outline settings' }).click();
     await expect(second.getByLabel('Heading depth')).toHaveValue('6');
-    await expect(second.getByRole('button', { name: 'Wide', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(second.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '357');
     await expect(second.getByRole('button', { name: 'Light', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(second.getByRole('button', { name: 'Purple', exact: true })).toHaveAttribute('aria-pressed', 'false');
     await expect(second.getByLabel('Outline text size')).toHaveValue('15');
     await expect(second.getByLabel('Custom theme color hex')).toHaveValue('#0EA5E9');
     await expect(second.getByLabel('Background color hex')).toHaveValue('#FFF7ED');
     await second.getByLabel('Heading depth').selectOption('1');
-    await second.getByRole('button', { name: 'Narrow', exact: true }).click();
+    await dragOutlineWidth(second, 290);
     await second.getByRole('button', { name: 'Dark', exact: true }).click();
     await second.getByLabel('Outline text size').fill('16');
     await second.getByLabel('Custom theme color hex').fill('#14B8A6');
     await second.getByLabel('Background color hex').fill('#111827');
+    await second.getByRole('switch', { name: 'Hover mode' }).click();
     await expect(page.getByLabel('Heading depth')).toHaveValue('1');
-    await expect(page.getByRole('button', { name: 'Narrow', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '290');
+    await expect(page.getByRole('switch', { name: 'Hover mode' })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Outline text size')).toHaveValue('16');
     await expect(page.getByLabel('Custom theme color hex')).toHaveValue('#14B8A6');
     await expect(page.getByLabel('Background color hex')).toHaveValue('#111827');
     await page.reload();
-    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+;' : 'Control+;');
     await page.getByRole('button', { name: 'Outline settings' }).click();
     await expect(page.getByLabel('Heading depth')).toHaveValue('1');
-    await expect(page.getByRole('button', { name: 'Narrow', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '290');
+    await expect(page.getByRole('switch', { name: 'Hover mode' })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Dark', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel('Outline text size')).toHaveValue('16');
     await expect(page.getByLabel('Custom theme color hex')).toHaveValue('#14B8A6');
@@ -200,7 +204,7 @@ for (const anchor of ['left', 'right']) {
         await page.reload();
         await page.getByRole('button', { name: 'Toggle outline' }).click();
         await page.getByRole('button', { name: 'Outline settings' }).click();
-        await page.getByRole('button', { name: 'Wide', exact: true }).click();
+        await dragOutlineWidth(page, 420);
         for (const width of [375, 768, 1440]) {
             await page.setViewportSize({ width, height: 900 });
             await expect.poll(async () => {
@@ -208,12 +212,12 @@ for (const anchor of ['left', 'right']) {
                 return !!rect && rect.x >= 0 && rect.x + rect.width <= width;
             }).toBe(true);
             await expect(page.locator('.scroll-pro-sidebar-shell')).toHaveAttribute('data-open-x', anchor);
-            await expect(page.getByRole('button', { name: 'Wide', exact: true })).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '420');
         }
-        expect((await page.locator(sidebarSelector).boundingBox())!.width).toBe(640);
-        await page.getByRole('button', { name: 'Standard', exact: true }).focus();
-        await page.keyboard.press('Space');
-        await expect(page.getByRole('button', { name: 'Standard', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        expect((await page.locator(sidebarSelector).boundingBox())!.width).toBe(420);
+        await page.getByRole('separator', { name: 'Outline width' }).focus();
+        await page.keyboard.press(anchor === 'left' ? 'ArrowRight' : 'ArrowLeft');
+        await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '410');
     });
 }
 
@@ -250,7 +254,7 @@ test('F12 moving the toggle cleans host styles on cancel, close and unmount', as
     }
 });
 
-test('prompt collapse hides only its answer outline and preserves it across view changes', async ({ extensionContext, extensionPage: page }) => {
+test('prompt collapse hides only its answer outline and preserves it across settings and reopening', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     const sidebar = page.locator(sidebarSelector);
@@ -264,9 +268,10 @@ test('prompt collapse hides only its answer outline and preserves it across view
     await expect(first.locator('.scroll-pro-subheading')).toHaveCount(0);
     await expect(last.locator('.scroll-pro-subheading')).toHaveCount(1);
     expect(await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(position);
-    await sidebar.getByRole('button', { name: 'Prompts', exact: true }).click();
-    await expect(sidebar.locator('.scroll-pro-collapse-btn')).toHaveCount(0);
-    await sidebar.getByRole('button', { name: 'All', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Outline settings' }).click();
+    await sidebar.getByRole('button', { name: 'Back to outline' }).click();
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
     const expand = first.getByRole('button', { name: 'Expand answer outline' });
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
     await expand.focus();
