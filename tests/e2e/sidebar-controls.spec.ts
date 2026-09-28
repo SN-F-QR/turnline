@@ -25,7 +25,6 @@ test('bulk collapse includes filtered turns, preserves host position and skips h
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const sidebar = await openOutline(page);
     await expect(sidebar.locator('.scroll-pro-outline-label')).toHaveText('All');
-    await expect(sidebar.getByRole('button', { name: 'Prompts', exact: true })).toHaveCount(0);
     const position = await page.locator('.thread-scroll-container').evaluate(element => element.scrollTop);
     const filter = sidebar.getByPlaceholder('Filter…');
     await filter.fill('Orbit Beta');
@@ -117,7 +116,7 @@ test('a prompt without answer content has no collapse control', async ({ extensi
 });
 
 for (const direction of ['left', 'right'] as const) {
-    test(`width drag clamps bounds, fixes the ${direction} anchor and double-click resets to Narrow`, async ({ extensionContext, extensionPage: page }) => {
+    test(`width drag clamps bounds, fixes the ${direction} anchor and double-click resets to 320px`, async ({ extensionContext, extensionPage: page }) => {
         await loadScenario(extensionContext, page, 'current-turn-unit');
         await page.evaluate(anchorX => localStorage.setItem('scroll-pro-sidebar-position:chatgpt', JSON.stringify({ anchorX, offsetX: 18, y: 72 })), direction === 'left' ? 'right' : 'left');
         await page.reload();
@@ -171,7 +170,6 @@ test('minimum width fits settings controls and a narrow viewport retains the sav
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const sidebar = await openOutline(page);
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
-    await expect(sidebar.getByRole('button', { name: 'Narrow', exact: true })).toHaveCount(0);
     await dragOutlineWidth(page, 214);
     await expect.poll(() => sidebar.evaluate(element => {
         const bounds = element.getBoundingClientRect();

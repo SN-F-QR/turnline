@@ -22,7 +22,7 @@ test('invalid stored preferences fall back, including nonfinite and out-of-range
     for (const value of [214, 319, 320, 357, 420]) assert.equal(normalizeWidth(value), value);
 });
 
-test('continuous width rounds pixels, clamps bounds and migrates Wide', () => {
+test('continuous width rounds pixels and clamps bounds', () => {
     assert.equal(normalizeWidth(213), 214);
     assert.equal(normalizeWidth(421), 420);
     assert.equal(normalizeWidth(640), 420);

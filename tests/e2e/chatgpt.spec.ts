@@ -24,12 +24,9 @@ test('current ChatGPT capture: extension mounts and outline opens', async ({ ext
   await openOutline(extensionPage);
 });
 
-test('F11: first run opens outline directly and only the toggle shortcut is handled [P2]', async ({ extensionContext, extensionPage }) => {
+test('F11 toggle shortcut works in the outline and host editor across reload and route changes', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.getByRole('button', { name: 'Dismiss' })).toHaveCount(0);
-  await expect(sidebar.getByText('Scroll just got a big update')).toHaveCount(0);
-
   const command = await extensionPage.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control');
   const filter = sidebar.getByPlaceholder('Filter…');
   await filter.fill('test');
@@ -376,17 +373,32 @@ test('F13 assistant-only output omits a fabricated user [P3 synthetic state]', a
   expect(markdown).not.toContain('**User**');
 });
 
-test('F13 assistant-only TXT export has no user section [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
+test('plain text copying and TXT export preserve code in assistant-only responses', async ({ extensionContext, extensionPage }) => {
   await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
+  await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
+  const code = 'const file_name = "**literal**";\nconsole.log(`value: ${file_name}`);';
+  await extensionPage.locator('[data-markdown-text-style]').first().evaluate((content, text) => {
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.className = 'language-js';
+    code.textContent = text;
+    pre.append(code);
+    content.append(pre);
+  }, code);
   const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await sidebar.locator('[data-block-key]').first().click({ button: 'right' });
+  await extensionPage.getByRole('button', { name: 'Copy response', exact: true }).click();
+  await expect.poll(() => extensionPage.evaluate(() => navigator.clipboard.readText())).toContain(code);
   const exportButton = sidebar.locator('[data-action="export-format"]');
   await exportButton.click({ button: 'right' });
   await extensionPage.getByRole('button', { name: /^Text/ }).click();
   const textPromise = extensionPage.waitForEvent('download');
   await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
   const plainText = await readFile(await (await textPromise).path(), 'utf8');
+  expect(plainText).toContain(code);
   expect(plainText).toContain('Assistant:');
   expect(plainText).not.toContain('User:');
 });

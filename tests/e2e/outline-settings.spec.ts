@@ -4,13 +4,16 @@ import { dragOutlineWidth } from '../helpers/sidebar';
 
 const sidebarSelector = '[aria-label="Turnline outline"]';
 
-test('F04/F05 real L02 headings keep their original nested levels', async ({ extensionContext, extensionPage: page }) => {
-    await loadScenario(extensionContext, page, 'long-response-l02');
+test('F04/F05 L02 outline preserves prompts, headings and original nested levels', async ({ extensionContext, extensionPage: page }) => {
+    const expected = await loadScenario(extensionContext, page, 'long-response-l02');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     const levels = await page.locator('[data-markdown-text-style] h1, [data-markdown-text-style] h2, [data-markdown-text-style] h3').evaluateAll(nodes =>
         nodes.filter(node => !node.closest('[data-d-component="box"]')).map(node => node.tagName.slice(1))
     );
     const sidebar = page.locator(sidebarSelector);
+    await expect(sidebar.locator('.scroll-pro-item-title').first()).toContainText(expected.firstPrompt!);
+    await expect(sidebar.getByRole('button', { name: expected.firstHeading!, exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: expected.lastHeading!, exact: true })).toBeVisible();
     await expect(sidebar.locator('[data-outline-level]')).toHaveCount(levels.length);
     // This real answer has only one Chinese chapter marker; preserve all raw levels.
     expect(await sidebar.locator('[data-outline-level]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-outline-level')))).toEqual(levels);

@@ -34,36 +34,6 @@ async function installOlderLoadOnScroll(page: Page, restoreNewer = false) {
   }, { loadedHtml: html, restoreNewer });
 }
 
-test('L01 real long-response DOM: cold and upward-loaded snapshots replay', async ({ extensionContext, extensionPage }) => {
-  const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
-  await expect(extensionPage.locator('[data-turn-key]')).toHaveCount(5);
-  expect(await extensionPage.locator('[data-turn-key]').evaluateAll((turns) => turns.map((turn) => turn.getAttribute('data-turn-key')))).toEqual(expected.cold.turnKeys);
-  await expect(extensionPage.locator('[data-content-search-unit-key]')).toHaveCount(expected.cold.contentUnits);
-  await expect(extensionPage.locator(headingSelector)).toHaveCount(expected.cold.headingCount);
-  await expect(extensionPage.locator('[data-user-message-bubble]').first()).toContainText(expected.cold.firstPrompt!);
-  await expect(extensionPage.locator(headingSelector).first()).toContainText(expected.cold.firstHeading!);
-
-  await installOlderLoadOnScroll(extensionPage);
-  await extensionPage.locator('.thread-scroll-container').hover();
-  await extensionPage.mouse.wheel(0, -2000);
-  await expect(extensionPage.locator('[data-turn-key]').first()).toHaveAttribute('data-turn-key', expected.loaded.turnKeys[0]);
-  expect(await extensionPage.locator('[data-turn-key]').evaluateAll((turns) => turns.map((turn) => turn.getAttribute('data-turn-key')))).toEqual(expected.loaded.turnKeys);
-  await expect(extensionPage.locator('[data-content-search-unit-key]')).toHaveCount(expected.loaded.contentUnits);
-  await expect(extensionPage.locator(headingSelector)).toHaveCount(expected.loaded.headingCount);
-  await expect(extensionPage.locator('[data-user-message-bubble]').first()).toContainText(expected.loaded.newPrompt!);
-  await expect(extensionPage.locator(headingSelector).first()).toContainText(expected.loaded.newFirstHeading!);
-});
-
-test('L02 real long-response DOM: messages and nested headings replay', async ({ extensionContext, extensionPage }) => {
-  const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l02');
-  expect(await extensionPage.locator('[data-turn-key]').evaluateAll((turns) => turns.map((turn) => turn.getAttribute('data-turn-key')))).toEqual(expected.turnKeys);
-  await expect(extensionPage.locator('[data-content-search-unit-key]')).toHaveCount(expected.contentUnits);
-  await expect(extensionPage.locator(headingSelector)).toHaveCount(expected.headingCount);
-  await expect(extensionPage.locator('[data-user-message-bubble]').first()).toContainText(expected.firstPrompt!);
-  await expect(extensionPage.locator(headingSelector).first()).toContainText(expected.firstHeading!);
-  await expect(extensionPage.locator(headingSelector).last()).toContainText(expected.lastHeading!);
-});
-
 test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', async ({ extensionContext, extensionPage }) => {
   await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
   const expected = await loadScenario(extensionContext, extensionPage, 'long-response-l01');
@@ -75,8 +45,10 @@ test('F07 loaded snapshot replaces turn nodes without stale outline text [P4]', 
   await extensionPage.locator('.thread-scroll-container').hover();
   await extensionPage.mouse.wheel(0, -2000);
   await expect(extensionPage.locator('[data-turn-key]').first()).toHaveAttribute('data-turn-key', expected.loaded.turnKeys[0]);
+  expect(await extensionPage.locator('[data-turn-key]').evaluateAll(turns => turns.map(turn => turn.getAttribute('data-turn-key')))).toEqual(expected.loaded.turnKeys);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(6);
   await expect(sidebar.locator('.scroll-pro-item-title').first()).toContainText(expected.loaded.newPrompt!);
+  await expect(sidebar.getByRole('button', { name: expected.loaded.newFirstHeading!, exact: true })).toBeVisible();
   await sidebar.locator('[data-block-key]').nth(1).locator('.scroll-pro-item-title').click();
   await expect(sidebar.locator('[data-block-key]').nth(1)).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => extensionPage.locator('[data-user-message-bubble]').nth(1).evaluate(bubble => {

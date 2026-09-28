@@ -84,16 +84,20 @@ export const serializeNodeToMarkdown = (node: Node): string => {
 export const stripMarkdown = (text: string): string => {
     if (!text) return '';
     return text
-        .replace(/^#+\s+/gm, '')
-        .replace(/(\*\*|__)(.*?)\1/g, '$2')
-        .replace(/(\*|_)(.*?)\1/g, '$2')
-        .replace(/```[\s\S]*?```/g, '')
-        .replace(/`([^`]+)`/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .replace(/^[\*\-]\s+/gm, '')
-        .replace(/^\d+\.\s+/gm, '')
-        .replace(/^>\s+/gm, '')
-        .replace(/^-{3,}$/gm, '')
+        // Captured code bodies occupy odd slots; only strip formatting from prose.
+        .split(/^```[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm)
+        .map((part, index) => index % 2 === 1 ? part : part
+            .replace(/^#+\s+/gm, '')
+            .replace(/(\*\*|__)(.*?)\1/g, '$2')
+            .replace(/(\*|_)(.*?)\1/g, '$2')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/^[\*\-]\s+/gm, '')
+            .replace(/^\d+\.\s+/gm, '')
+            .replace(/^>\s+/gm, '')
+            .replace(/^-{3,}$/gm, '')
+        )
+        .join('')
         .trim();
 };
 

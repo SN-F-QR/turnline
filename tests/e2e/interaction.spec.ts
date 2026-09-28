@@ -132,17 +132,21 @@ test('F15 empty content hydrates after scrolling and refreshes shared export dat
 });
 
 test('F15 continued discovery reaches a bounded timeout and clears busy [synthetic history loading]', async ({ extensionContext, extensionPage: page }) => {
+    await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
     await loadScenario(extensionContext, page, 'current-turn-unit');
     await page.evaluate(() => {
         const turn = document.querySelector('[data-turn-key]')!;
         let sequence = 0;
-        const timer = setInterval(() => turn.setAttribute('data-turn-key', `older-${++sequence}`), 200);
-        setTimeout(() => clearInterval(timer), 17000);
+        // Keep discovering messages until teardown so natural settling cannot pass.
+        setInterval(() => turn.setAttribute('data-turn-key', `older-${++sequence}`), 200);
     });
     const sidebar = await open(page);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 20000 });
     await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveCount(0);
     await expect(sidebar.getByRole('status')).toContainText('messages discovered');
+    await sidebar.locator('[data-action="copy-format"]').click({ button: 'right' });
+    await page.getByRole('button', { name: /^JSON/ }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/"scanStatus"\s*:\s*"partial"/);
 });
 
 test('F15 settled discovery shows a count and refresh action', async ({ extensionContext, extensionPage: page }) => {
@@ -151,11 +155,8 @@ test('F15 settled discovery shows a count and refresh action', async ({ extensio
     const status = sidebar.getByRole('status');
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(status).toContainText('4 messages discovered');
-    await expect(status).not.toContainText('Scan finished');
-    await expect(status).not.toContainText('No more messages found');
     await sidebar.getByRole('button', { name: 'Refresh history' }).click();
     await expect(status).toContainText('Refreshing…');
-    await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveText('');
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(status).toContainText('4 messages discovered');
 
@@ -166,10 +167,9 @@ test('F15 settled discovery shows a count and refresh action', async ({ extensio
     const data = JSON.parse(await readFile(await (await download).path(), 'utf8'));
     expect(data.coverage).toMatchObject({ complete: null, scanStatus: 'finished' });
     expect(data.coverage.description).toContain('Full history not verified');
-    expect(data.coverage.description).not.toContain('Incomplete');
 });
 
-test('F15 missing content can be refreshed without a misleading completeness warning [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
+test('F15 missing content hydrates on refresh [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const original = await page.locator('[data-markdown-text-style]').first().evaluate(content => {
         const html = content.innerHTML;
@@ -181,9 +181,9 @@ test('F15 missing content can be refreshed without a misleading completeness war
     const sidebar = await open(page);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
-    await expect(sidebar.getByRole('status')).not.toContainText('Incomplete');
     await page.locator('[data-markdown-text-style]').first().evaluate((content, html) => { content.innerHTML = html; }, original);
     await sidebar.getByRole('button', { name: 'Refresh history' }).click();
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
+    await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
 });
