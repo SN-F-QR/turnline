@@ -56,7 +56,12 @@ test('F15 streaming an existing response does not prolong history discovery [syn
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 3500 });
     // Normal turn observation continues after history discovery has finished.
     await sidebar.getByPlaceholder('Filter…').fill('more');
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+    await page.locator('[data-markdown-text-style] h3').first().evaluate(heading => {
+        heading.firstChild!.textContent += ' more';
+    });
     await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await expect(sidebar.getByRole('button', { name: 'Orbit Beta more', exact: true })).toBeVisible();
 });
 
 test('F15 manual scrolling stops discovery without pulling the reader back', async ({ extensionContext, extensionPage: page }) => {

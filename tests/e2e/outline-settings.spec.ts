@@ -66,7 +66,7 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     const sidebar = page.locator(sidebarSelector);
     const list = sidebar.locator('.scroll-pro-sidebar-list');
     const firstItem = sidebar.locator('[data-block-key]').first();
-    await sidebar.getByPlaceholder('Filter…').fill('Chapter');
+    await sidebar.getByPlaceholder('Filter…').fill('预习');
     await firstItem.locator('.scroll-pro-item-title').click();
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await list.evaluate(element => { element.scrollTop = 120; });
@@ -141,7 +141,7 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await page.keyboard.press('Escape');
     await expect(settingsButton).toBeFocused();
     await expect(sidebar.locator('.scroll-pro-history-status')).toBeVisible();
-    await expect(sidebar.getByPlaceholder('Filter…')).toHaveValue('Chapter');
+    await expect(sidebar.getByPlaceholder('Filter…')).toHaveValue('预习');
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => list.evaluate(element => element.scrollTop)).toBe(savedScroll);
     await expect(firstItem.locator('.scroll-pro-item-title')).toHaveCSS('font-size', '16px');

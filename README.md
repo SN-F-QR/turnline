@@ -13,7 +13,7 @@ Turnline adds a floating conversation outline to **ChatGPT, Claude, and Gemini**
 |                             | What you can do                                                                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Navigate long chats**     | Jump to a prompt or a heading inside a response. The outline highlights your reading position as you scroll.                                     |
-| **Find a section**          | Filter by prompt, response, or heading text. Collapse individual answer outlines or all turns at once.                                           |
+| **Find a section**          | Filter by prompt or section heading text. Collapse individual answer outlines or all turns at once.                                             |
 | **Recover ChatGPT history** | Discover older messages by scrolling the page and retain discovered content when ChatGPT removes it from the visible DOM.                        |
 | **Copy what you need**      | Copy a prompt, a response, a Q&A pair, or the discovered conversation. Choose plain text, Markdown, or JSON for conversation copies.             |
 | **Export a conversation**   | Save the discovered range as Markdown, plain text, or JSON, or use the browser's print dialog to save a PDF.                                     |
@@ -54,7 +54,7 @@ In Firefox 128 or later, open `about:debugging`, choose **This Firefox → Load 
 ## Using Turnline
 
 - **Open the outline:** click the floating toggle or press `Cmd + ;` on macOS / `Ctrl + ;` on Windows and Linux.
-- **Jump and filter:** click a prompt or heading to navigate. Use **Filter…** to find matching content and the arrows to collapse answer outlines.
+- **Jump and filter:** click a prompt or heading to navigate. **Filter…** matches prompt and section heading text within your heading depth setting, ignoring case and leading or trailing search spaces. A matching prompt keeps its answer outline; otherwise, only matching sections appear under their turn. Response body text and answer summaries are not searched. Clear the filter to restore all turns. Use the arrows to collapse answer outlines; filtering preserves their collapsed state. Copies and exports include the full discovered content.
 - **Copy:** right-click a turn for **Copy prompt**, **Copy response**, or **Copy Q&A**. Use the top copy button for the discovered conversation; right-click it to select a format.
 - **Export:** click the top export button, or right-click it to choose Markdown, PDF, Text, or JSON. ChatGPT exports can ask to scroll through older content first; cancelling the scan stops the export.
 - **Customize:** open **Outline settings**. Preferences are saved locally and shared between tabs in the same browser profile.

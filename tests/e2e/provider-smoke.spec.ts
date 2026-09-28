@@ -15,6 +15,14 @@ for (const [provider, url] of [['claude', 'https://claude.ai/chat/fixture-basic'
         const sidebar = page.getByRole('complementary');
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
         await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toHaveCount(0);
+        const filter = sidebar.getByPlaceholder('Filter…');
+        await filter.fill('Details');
+        await expect(sidebar.locator('[data-outline-level]')).toHaveText(['Details']);
+        await filter.fill('Compatibility answer');
+        await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+        await filter.fill('Compatibility prompt');
+        await expect(sidebar.locator('[data-outline-level]')).toHaveCount(3);
+        await filter.clear();
         await sidebar.getByRole('button', { name: 'Collapse all turns' }).click();
         await expect(sidebar.locator('[data-outline-level]')).toHaveCount(0);
         await sidebar.getByRole('button', { name: 'Expand all turns' }).click();

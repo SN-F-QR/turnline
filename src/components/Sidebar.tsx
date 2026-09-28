@@ -14,6 +14,7 @@ import { generateExportFilename, getChatTitle } from '../lib/exportFilenames';
 import { getPdfStyles, getPdfFooter, formatPdfDate } from '../lib/pdfStyles';
 import { printHtmlAsPdf } from '../lib/pdfPrint';
 import { buildConversationBlocks, type Block } from '../lib/conversationBlocks';
+import { filterOutlineBlocks } from '../lib/outlineFilter';
 import { getHeadingLevel, getOutlineWidth, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from '../lib/outlineSettings';
 import type { OutlineSettingsController } from '../hooks/useOutlineSettings';
 import { useSidebarResize } from '../hooks/useSidebarResize';
@@ -617,22 +618,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     ).map(block => block.key), [blocks]);
     const allCollapsed = collapsibleKeys.length > 0 && collapsibleKeys.every(key => collapsedBlocks.has(key));
 
-    const filteredBlocks = useMemo(() => {
-        const term = search.toLowerCase().trim();
-        return blocks.filter((block) => {
-            const promptText = (block.prompt?.text || block.title).toLowerCase();
-            const answerText = (block.answer?.text || '').toLowerCase();
-            const headingsText = block.headings.map((h) => h.innerText.toLowerCase()).join(' ');
-            if (!term) return true;
-            return (
-                promptText.includes(term) ||
-                answerText.includes(term) ||
-                (block.answer?.contextLabel || '').toLowerCase().includes(term) ||
-                (block.answer?.timeLabel || '').toLowerCase().includes(term) ||
-                headingsText.includes(term)
-            );
-        });
-    }, [blocks, search]);
+    const filteredBlocks = useMemo(() => filterOutlineBlocks(blocks, search, depth), [blocks, search, depth]);
 
     type FocusItem =
         | { key: string; kind: 'block'; block: Block }
@@ -641,21 +627,20 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
     const focusableItems: FocusItem[] = useMemo(() => {
         const items: FocusItem[] = [];
 
-        filteredBlocks.forEach((block) => {
+        filteredBlocks.forEach(({ block, headingIndices }) => {
             items.push({ key: block.key, kind: 'block', block });
             if (block.answer && !collapsedBlocks.has(block.key)) {
                 if (block.headings.length > 0) {
-                    block.headings.forEach((h, idx) => {
-                        if (getHeadingLevel(h) > depth) return;
-                        items.push({ key: `${block.key}-heading-${idx}`, kind: 'heading', block, heading: h });
+                    headingIndices.forEach(index => {
+                        items.push({ key: `${block.key}-heading-${index}`, kind: 'heading', block, heading: block.headings[index] });
                     });
-                } else {
+                } else if (block.answer.text) {
                     items.push({ key: `${block.key}-heading-0`, kind: 'heading', block, heading: undefined });
                 }
             }
         });
         return items;
-    }, [filteredBlocks, depth, collapsedBlocks]);
+    }, [filteredBlocks, collapsedBlocks]);
 
     const focusIndexByKey = useMemo(() => {
         const map = new Map<string, number>();
@@ -859,7 +844,9 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                     line = Math.min(rect.bottom, viewport.bottom) - 1;
                 }
             }
-            const block = filteredBlocks.find(item => item.prompt?.id === turn?.id || item.answer?.id === turn?.id);
+            const result = filteredBlocks.find(({ block }) => block.prompt?.id === turn?.id || block.answer?.id === turn?.id);
+            const block = result?.block;
+            const headingIndices = result?.headingIndices ?? [];
             let key = block?.key || null;
             if (block && turn?.id === block.answer?.id && !collapsedBlocks.has(block.key)) {
                 let index = -1;
@@ -868,18 +855,18 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                 });
                 if (index >= 0) {
                     let level = getHeadingLevel(block.headings[index]);
-                    if (level > depth) {
+                    if (!headingIndices.includes(index)) {
                         // Walk ancestors, skipping preceding siblings of the hidden heading.
                         while (--index >= 0) {
                             const candidate = getHeadingLevel(block.headings[index]);
                             if (candidate < level) {
                                 level = candidate;
-                                if (level <= depth) break;
+                                if (headingIndices.includes(index)) break;
                             }
                         }
                     }
                     if (index >= 0) key = `${block.key}-heading-${index}`;
-                } else if (!block.headings.length) key = `${block.key}-heading-0`;
+                } else if (!block.headings.length && block.answer?.text) key = `${block.key}-heading-0`;
             }
             setActiveKey(key);
         };
@@ -895,7 +882,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             window.removeEventListener('scroll', schedule, true);
             window.removeEventListener('resize', schedule);
         };
-    }, [container, isOpen, isPaused, turns, filteredBlocks, depth, history.status, collapsedBlocks]);
+    }, [container, isOpen, isPaused, turns, filteredBlocks, history.status, collapsedBlocks]);
 
     const previousFocusItems = useRef(focusableItems);
     useEffect(() => {
@@ -905,7 +892,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             let next = focusableItems.findIndex(item => item.key === previous.key);
             if (next < 0 && previous.kind === 'heading') {
                 const originalIndex = previous.block.headings.indexOf(previous.heading!);
-                const parent = previous.block.headings.slice(0, originalIndex).map((heading, index) => ({ heading, index })).reverse().find(({ heading }) => getHeadingLevel(heading) <= depth);
+                const parent = previous.block.headings.slice(0, originalIndex).map((heading, index) => ({ heading, index })).reverse().find(({ index }) => focusIndexByKey.has(`${previous.block.key}-heading-${index}`));
                 const parentKey = parent ? `${previous.block.key}-heading-${parent.index}` : previous.block.key;
                 next = focusableItems.findIndex(item => item.key === parentKey);
                 if (next < 0) next = focusableItems.findIndex(item => item.key === previous.block.key);
@@ -915,7 +902,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
         if (focusedIndex >= focusableItems.length && focusableItems.length > 0) {
             setFocusedIndex(focusableItems.length - 1);
         }
-    }, [focusableItems, depth]);
+    }, [focusableItems, focusIndexByKey]);
 
     useEffect(() => {
         const handleStorage = (event: StorageEvent) => {
@@ -1055,7 +1042,7 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
             const itemEl = target.closest('[data-block-key]') as HTMLElement | null;
             if (itemEl) {
                 const key = itemEl.getAttribute('data-block-key');
-                const block = key ? filteredBlocksRef.current.find(b => b.key === key) : null;
+                const block = key ? filteredBlocksRef.current.find(item => item.block.key === key)?.block : null;
                 if (block) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1491,11 +1478,11 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                     </div>
                                 </div>
                             </div>
-                        ) : filteredBlocks.map((block) => {
+                        ) : filteredBlocks.map(({ block, headingIndices }) => {
                             const focusIdx = focusIndexByKey.get(block.key) ?? -1;
                             const isCollapsed = collapsedBlocks.has(block.key);
                             const canCollapse = block.answer &&
-                                (block.headings.length > 0 ? block.headings.some(heading => getHeadingLevel(heading) <= depth) : !!block.answer.text);
+                                (block.headings.length > 0 ? headingIndices.length > 0 : !!block.answer.text);
                             return (
                                 <div
                                     key={block.key}
@@ -1574,8 +1561,8 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                                         {block.answer && !isCollapsed && (
                                             <div className="scroll-pro-subheading-list">
                                                 {block.headings.length > 0 ? (
-                                                    block.headings.map((h, i) => {
-                                                        if (getHeadingLevel(h) > depth) return null;
+                                                    headingIndices.map(i => {
+                                                        const h = block.headings[i];
                                                         const headingKey = `${block.key}-heading-${i}`;
                                                         const headingFocusIndex = focusIndexByKey.get(headingKey) ?? -1;
                                                         return (
