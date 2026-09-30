@@ -2,6 +2,11 @@ import { inferChatGptOutlineLevels } from './chatgptHeadingLevels';
 import type { Provider, Turn } from '../types';
 import { CHATGPT_TURN_SELECTOR, chatgptContentElement, chatgptMarkdown } from './chatgptContent';
 
+export const isChatGptChatPage = (path: string): boolean => {
+    // Project landing pages have no transcript; project and custom GPT chats do.
+    return /^\/(c|g)\//.test(path) && !/^\/g\/[^/]+\/project(?:\/|$)/.test(path);
+};
+
 const nodeIds = new WeakMap<HTMLElement, number>();
 let nextNodeId = 0;
 const fallbackId = (node: HTMLElement) => {

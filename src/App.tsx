@@ -6,14 +6,14 @@ import { useChatTurns } from './hooks/useChatTurns';
 import { useShortcuts } from './hooks/useShortcuts';
 import { useOutlineSettings } from './hooks/useOutlineSettings';
 import { getHexColorTone, getOutlineFontSizes } from './lib/outlineSettings';
+import { isChatGptChatPage } from './providers/chatgpt';
 
 /** Check if the current URL is an active chat page (not settings, home, etc.) */
 function checkIsChatPage(providerName: string): boolean {
   const path = window.location.pathname;
   switch (providerName) {
     case 'chatgpt':
-      // /c/{id} or /g/{id} (GPT chats)
-      return /^\/(c|g)\//.test(path);
+      return isChatGptChatPage(path);
     case 'claude':
       // /chat/{id}
       return /^\/chat\//.test(path);

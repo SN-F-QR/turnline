@@ -24,6 +24,47 @@ test('current ChatGPT capture: extension mounts and outline opens', async ({ ext
   await openOutline(extensionPage);
 });
 
+test('ChatGPT project landing pages disable the outline across SPA navigation and reload', async ({ extensionContext, extensionPage }) => {
+  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const projectChatPath = `/g/g-p-fixture${new URL(extensionPage.url()).pathname}`;
+  const projectPath = '/g/g-p-fixture/project';
+  const sidebar = await openOutline(extensionPage);
+  const toggle = extensionPage.getByRole('button', { name: 'Toggle outline' });
+
+  // Keep the old transcript mounted to model ChatGPT's cached workspaces.
+  await extensionPage.evaluate(path => history.pushState({}, '', path), projectPath);
+  await expect(toggle).toHaveCount(0);
+  await expect(sidebar).toHaveCount(0);
+  expect(await extensionPage.evaluate(() => {
+    const event = new KeyboardEvent('keydown', {
+      key: ';', bubbles: true, cancelable: true,
+      [/Mac|iPhone|iPad/.test(navigator.platform) ? 'metaKey' : 'ctrlKey']: true,
+    });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(false);
+  await expect(sidebar).toHaveCount(0);
+
+  await extensionPage.evaluate(path => history.pushState({}, '', path), projectChatPath);
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+
+  await extensionPage.evaluate(() => history.back());
+  await expect(extensionPage).toHaveURL(`https://chatgpt.com${projectPath}`);
+  await expect(toggle).toHaveCount(0);
+  await expect(sidebar).toHaveCount(0);
+
+  await extensionContext.route(`https://chatgpt.com${projectPath}`, route => route.fulfill({
+    contentType: 'text/html', body: '<!doctype html><html><body><main><h1>Fixture project</h1></main></body></html>',
+  }));
+  await extensionPage.reload();
+  await expect(extensionPage.locator('.scroll-pro-app-root')).toBeAttached();
+  await expect(toggle).toHaveCount(0);
+  await expect(sidebar).toHaveCount(0);
+});
+
 test('F11 toggle shortcut works in the outline and host editor across reload and route changes', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const chatUrl = extensionPage.url();
