@@ -101,6 +101,10 @@ test('newly discovered turns expand and changing conversations resets collapsed 
     await expect(sidebar.getByRole('button', { name: 'Expand answer outline' })).toHaveCount(2);
     await expect(sidebar.getByRole('button', { name: 'Collapse all turns' })).toBeVisible();
     await page.evaluate(() => {
+        // Model the new chat's DOM identity as well as its URL.
+        document.querySelectorAll('[data-chatgpt-selection-conversation-id]').forEach(marker => {
+            marker.setAttribute('data-chatgpt-selection-conversation-id', 'fixture-sidebar-new-chat');
+        });
         history.pushState({}, '', '/c/fixture-sidebar-new-chat');
         window.dispatchEvent(new PopStateEvent('popstate'));
     });

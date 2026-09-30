@@ -43,7 +43,17 @@ export const chatgpt: Provider = {
     getTurns: (container: HTMLElement): Turn[] => {
         const turns: Turn[] = [];
         const seenIds = new Set<string>();
-        const candidates = Array.from(container.querySelectorAll<HTMLElement>(CHATGPT_TURN_SELECTOR));
+        const conversationId = window.location.pathname.match(/\/c\/([^/]+)/)?.[1];
+        const candidates = Array.from(container.querySelectorAll<HTMLElement>(CHATGPT_TURN_SELECTOR)).filter(root => {
+            // ChatGPT keeps inactive workspaces mounted, and commits the new URL
+            // before hiding the old transcript. Neither belongs in the new history.
+            if (!root.getClientRects().length) return false;
+            const transcript = root.closest('[data-chatgpt-conversation-selection-target]') || root;
+            const marker = root.querySelector('[data-chatgpt-selection-conversation-id]')
+                || transcript.querySelector('[data-chatgpt-selection-conversation-id]');
+            const id = marker?.getAttribute('data-chatgpt-selection-conversation-id')?.replace(/^local-chatgpt:/, '');
+            return !conversationId || !id || id === conversationId;
+        });
         const validModern = candidates.filter(root => root.hasAttribute('data-turn-key') &&
             Array.from(root.querySelectorAll<HTMLElement>('[data-content-search-unit-key]')).some(unit => {
                 const key = unit.getAttribute('data-content-search-unit-key') || '';

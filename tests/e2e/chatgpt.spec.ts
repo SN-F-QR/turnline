@@ -26,6 +26,7 @@ test('current ChatGPT capture: extension mounts and outline opens', async ({ ext
 
 test('F11 toggle shortcut works in the outline and host editor across reload and route changes', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const chatUrl = extensionPage.url();
   const sidebar = await openOutline(extensionPage);
   const command = await extensionPage.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control');
   const filter = sidebar.getByPlaceholder('Filter…');
@@ -90,10 +91,10 @@ test('F11 toggle shortcut works in the outline and host editor across reload and
     document.body.appendChild(document.createElement('span'));
   });
   await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toHaveCount(0);
-  await extensionPage.evaluate(() => {
-    history.pushState({}, '', '/c/fixture-current-turn-unit');
+  await extensionPage.evaluate((url) => {
+    history.pushState({}, '', url);
     document.body.appendChild(document.createElement('span'));
-  });
+  }, chatUrl);
   await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
   await extensionPage.keyboard.press(`${command}+;`);
   await expect(sidebar).toBeVisible();
@@ -301,6 +302,7 @@ for (const remount of [false, true]) {
 
 test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const chatUrl = extensionPage.url();
   const sidebar = await openOutline(extensionPage);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
   await extensionPage.evaluate(() => {
@@ -315,6 +317,9 @@ test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ ex
     holder.innerHTML = sessionStorage.getItem('saved-chat')!;
     const replacement = holder.firstElementChild!;
     replacement.querySelector<HTMLElement>('[data-user-message-bubble] .whitespace-pre-wrap')!.textContent = '';
+    replacement.querySelectorAll('[data-chatgpt-selection-conversation-id]').forEach(marker => {
+      marker.setAttribute('data-chatgpt-selection-conversation-id', 'fixture-other');
+    });
     document.querySelector('.thread-scroll-container')!.replaceWith(replacement);
   });
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
@@ -330,8 +335,132 @@ test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ ex
   await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
   await extensionPage.evaluate(() => history.replaceState({}, '', '/'));
   await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toHaveCount(0);
-  await extensionPage.evaluate(() => history.replaceState({}, '', '/c/fixture-current-turn-unit'));
+  await extensionPage.evaluate((url) => history.replaceState({}, '', url), chatUrl);
   await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
+});
+
+test('SPA navigation waits for the new conversation before retaining history', async ({ extensionContext, extensionPage }) => {
+  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await extensionPage.evaluate(() => {
+    // The router commits the URL while the previous transcript is still mounted.
+    history.pushState({}, '', '/c/fixture-delayed-chat');
+    document.title = 'Delayed conversation - ChatGPT';
+  });
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+
+  await extensionPage.evaluate(() => {
+    const transcript = document.querySelector('[data-chatgpt-conversation-selection-target]')!;
+    transcript.innerHTML = `<div data-turn-key="delayed-turn">
+      <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Plan an imaginary voyage</div></div>
+      <div data-content-search-unit-key="fallback-turn-0:2:assistant"><div data-markdown-text-style="assistant-message"><h2>Voyage itinerary</h2><p>Visit a fictional moon.</p></div></div>
+    </div>`;
+  });
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+  await expect(sidebar.getByRole('button', { name: 'Voyage itinerary', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  for (const text of [...expected.prompts, ...expected.headings]) {
+    await expect(sidebar).not.toContainText(text);
+  }
+});
+
+for (const prefix of ['/c/', '/g/g-p-fixture/c/']) {
+  test(`cached ChatGPT workspaces stay isolated across navigation (${prefix})`, async ({ extensionContext, extensionPage }) => {
+    const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+    const chatUrl = extensionPage.url();
+    const sidebar = await openOutline(extensionPage);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await extensionPage.evaluate((prefix) => {
+      // Live ChatGPT preserves entire workspaces with display:none !important.
+      // The cached chat deliberately has more turns than the active chat.
+      const main = document.querySelector('main')!;
+      const cached = document.createElement('div');
+      cached.id = 'cached-original';
+      main.replaceWith(cached);
+      cached.append(main);
+      cached.style.setProperty('display', 'none', 'important');
+      const active = document.createElement('div');
+      active.id = 'cached-other';
+      active.innerHTML = `<main><div class="thread-scroll-container"><div data-chatgpt-conversation-selection-target>
+        <div data-turn-key="cached-other-turn">
+          <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Plan an imaginary voyage</div></div>
+          <div data-content-search-unit-key="fallback-turn-0:2:assistant"><div data-chatgpt-selection-conversation-id="fixture-cached-other">
+            <div data-markdown-text-style="assistant-message"><h2>Voyage itinerary</h2><p style="min-height:900px">Visit a fictional moon.</p><h2>Landing plan</h2><p>Explore the imaginary coast.</p></div>
+          </div></div>
+        </div>
+      </div></div></main>`;
+      document.body.append(active);
+      history.pushState({}, '', `${prefix}fixture-cached-other`);
+    }, prefix);
+    await expect(extensionPage.locator('[data-turn-key]')).toHaveCount(3);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText('Plan an imaginary voyage');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
+    for (const text of [...expected.prompts, ...expected.headings]) {
+      await expect(sidebar).not.toContainText(text);
+    }
+    const cachedPosition = await extensionPage.locator('#cached-original .thread-scroll-container').evaluate(el => el.scrollTop);
+    await sidebar.getByRole('button', { name: 'Voyage itinerary', exact: true }).click();
+    await expect.poll(() => extensionPage.getByRole('heading', { name: 'Voyage itinerary', exact: true }).evaluate(heading => {
+      const target = heading.getBoundingClientRect();
+      const scroller = heading.closest('.thread-scroll-container')!.getBoundingClientRect();
+      return target.top >= scroller.top && target.top < scroller.bottom;
+    })).toBe(true);
+    expect(await extensionPage.locator('#cached-original .thread-scroll-container').evaluate(el => el.scrollTop)).toBe(cachedPosition);
+
+    // Returning to a cached workspace only changes styles and the route; no
+    // transcript nodes are inserted, removed, or replaced.
+    await extensionPage.evaluate(() => {
+      document.querySelector<HTMLElement>('#cached-original')!.style.removeProperty('display');
+      document.querySelector<HTMLElement>('#cached-other')!.style.setProperty('display', 'none', 'important');
+      history.back();
+    });
+    await expect(extensionPage).toHaveURL(chatUrl);
+    await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+    await expect(sidebar).not.toContainText('Voyage itinerary');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toHaveText('4 messages discovered');
+
+    await extensionPage.evaluate(() => {
+      document.querySelector<HTMLElement>('#cached-original')!.style.setProperty('display', 'none', 'important');
+      document.querySelector<HTMLElement>('#cached-other')!.style.removeProperty('display');
+      history.forward();
+    });
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText('Plan an imaginary voyage');
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
+  });
+}
+
+test('cached workspace visibility changes rebind the conversation observer without a URL change', async ({ extensionContext, extensionPage }) => {
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await extensionPage.evaluate(() => {
+    const main = document.querySelector('main')!;
+    const original = document.createElement('div');
+    original.id = 'original-workspace';
+    main.replaceWith(original);
+    original.append(main);
+    const cached = document.createElement('div');
+    cached.id = 'replacement-workspace';
+    cached.append(main.cloneNode(true));
+    cached.querySelector('[data-markdown-text-style] h2')!.textContent = 'Cached view updated';
+    cached.style.setProperty('display', 'none', 'important');
+    document.body.append(cached);
+  });
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Cached view updated', exact: true })).toHaveCount(0);
+  await extensionPage.evaluate(() => {
+    document.querySelector<HTMLElement>('#original-workspace')!.style.setProperty('display', 'none', 'important');
+    document.querySelector<HTMLElement>('#replacement-workspace')!.style.removeProperty('display');
+  });
+  await expect(sidebar.getByRole('button', { name: 'Cached view updated', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
 });
 
 test('F13 assistant-only output omits a fabricated user [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {

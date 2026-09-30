@@ -111,6 +111,9 @@ export function useChatTurns(isOpen: boolean) {
         const headingCache = new Map<string, string>();
 
         const parse = () => {
+            // A queued parse can run after the router changes the URL but before
+            // the body observer or URL timer clears the previous history.
+            if (location.href !== lastUrl || !currentContainer?.isConnected) check();
             cancelAnimationFrame(frame);
             frame = 0;
             if (!currentContainer || !dirty) return snapshot;
@@ -162,7 +165,8 @@ export function useChatTurns(isOpen: boolean) {
                 turnObserver?.disconnect();
                 currentContainer = null;
             }
-            const candidates = Array.from(document.querySelectorAll<HTMLElement>(provider.scrollContainerSelector));
+            const candidates = Array.from(document.querySelectorAll<HTMLElement>(provider.scrollContainerSelector))
+                .filter(candidate => candidate.getClientRects().length);
             let best: HTMLElement | null = null;
             let count = 0;
             for (const candidate of candidates) {
@@ -172,7 +176,7 @@ export function useChatTurns(isOpen: boolean) {
                     best = candidate;
                 }
             }
-            const nextContainer = best || document.querySelector<HTMLElement>('main') || document.body;
+            const nextContainer = best || candidates.find(candidate => candidate.matches('main')) || document.body;
             if (nextContainer !== currentContainer) {
                 turnObserver?.disconnect();
                 currentContainer = nextContainer;
@@ -181,7 +185,7 @@ export function useChatTurns(isOpen: boolean) {
                 turnObserver.observe(nextContainer, {
                     childList: true, characterData: true, subtree: true,
                     attributes: true,
-                    attributeFilter: ['data-turn-key', 'data-turn-id', 'data-message-id', 'data-turn', 'data-content-search-unit-key', 'data-message-author-role', 'data-markdown-text-style', 'data-user-message-bubble', 'href', 'src', 'alt'],
+                    attributeFilter: ['data-turn-key', 'data-turn-id', 'data-message-id', 'data-turn', 'data-content-search-unit-key', 'data-chatgpt-selection-conversation-id', 'data-message-author-role', 'data-markdown-text-style', 'data-user-message-bubble', 'href', 'src', 'alt'],
                 });
                 scheduleParse();
             }
@@ -199,12 +203,15 @@ export function useChatTurns(isOpen: boolean) {
         const bodyObserver = new MutationObserver(records => {
             // Chat text is handled by turnObserver. Activity in the account
             // sidebar, composer or our own host must not reserialize the chat.
-            const structureChanged = records.some(record => Array.from(record.addedNodes).some(node =>
-                node instanceof HTMLElement && (node.matches(provider.scrollContainerSelector) || node.matches(selector) || node.querySelector(selector))
-            ));
+            const containsChat = (node: Node) => node instanceof HTMLElement &&
+                (node.matches(provider.scrollContainerSelector) || node.matches(selector) || node.querySelector(selector));
+            const structureChanged = records.some(record =>
+                Array.from(record.addedNodes).some(containsChat) ||
+                (record.type === 'attributes' && containsChat(record.target))
+            );
             if (location.href !== lastUrl || !currentContainer?.isConnected || structureChanged) check();
         });
-        bodyObserver.observe(document.body, { childList: true, subtree: true });
+        bodyObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden'] });
         const timer = window.setInterval(() => {
             if (location.href !== lastUrl) check();
         }, 250);

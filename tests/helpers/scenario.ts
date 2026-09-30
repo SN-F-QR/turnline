@@ -40,9 +40,11 @@ export async function loadScenario(context: BrowserContext, page: Page, name: Sc
     readFile(resolve(directory, 'layout.css'), 'utf8'),
     readFile(resolve(directory, 'expected.json'), 'utf8'),
   ]);
+  // Keep the URL consistent with the sanitized conversation identity in the DOM.
+  const conversationId = html.match(/data-chatgpt-selection-conversation-id="(?:local-chatgpt:)?([^"]+)"/)![1];
   const url = name === 'current-turn-unit'
-    ? `https://chatgpt.com/c/fixture-${name}`
-    : `https://chatgpt.com/g/g-p-fixture/c/fixture-${name}`;
+    ? `https://chatgpt.com/c/${conversationId}`
+    : `https://chatgpt.com/g/g-p-fixture/c/${conversationId}`;
   await context.route('**/*', async (route) => {
     const requestUrl = route.request().url();
     if (requestUrl === url) {
