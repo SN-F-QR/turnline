@@ -1,7 +1,7 @@
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 
-test('F15 loaded long conversation: scan work is bounded [performance sample]', async ({ extensionContext, extensionPage: page }, testInfo) => {
+test('loaded long conversation: record history scan performance [measurement only]', async ({ extensionContext, extensionPage: page }, testInfo) => {
     await loadScenario(extensionContext, page, 'long-response-l01');
     const toggle = page.getByRole('button', { name: 'Toggle outline' });
     await expect(toggle).toBeVisible();

@@ -23,11 +23,22 @@ test('conversation blocks use each message once in source order', () => {
     }
 });
 
-test('independent assistant title prefers context, time, heading, then text', () => {
+test('independent assistant title prefixes time and prefers context, populated heading, then text', () => {
     const base: Entry = A('text');
-    assert.equal(buildConversationBlocks([base])[0].title, 'text');
-    assert.equal(buildConversationBlocks([{ ...base, timeLabel: '9:30 AM' }])[0].title, '9:30 AM · text');
-    assert.equal(buildConversationBlocks([{ ...base, contextLabel: 'Daily brief', timeLabel: '9:30 AM' }])[0].title, '9:30 AM · Daily brief');
+    const heading = { innerText: ' Overview ', tagName: 'H2', element: {} as HTMLElement };
+    const cases: Array<[Partial<Entry>, string]> = [
+        [{}, 'text'],
+        [{ timeLabel: '9:30 AM' }, '9:30 AM · text'],
+        [{ headings: [heading] }, 'Overview'],
+        [{ headings: [heading], timeLabel: '9:30 AM' }, '9:30 AM · Overview'],
+        [{ headings: [heading], contextLabel: ' Daily brief ', timeLabel: '9:30 AM' }, '9:30 AM · Daily brief'],
+        [{ headings: [{ ...heading, isPlaceholder: true }] }, 'text'],
+        [{ headings: [{ ...heading, innerText: ' ' }, heading] }, 'Overview'],
+        [{ contextLabel: ' ', timeLabel: ' ', text: '' }, 'Assistant update'],
+    ];
+    for (const [overrides, expected] of cases) {
+        assert.equal(buildConversationBlocks([{ ...base, ...overrides }])[0].title, expected);
+    }
 });
 
 test('each answer gets independent depths without changing source headings or counting the prompt', () => {

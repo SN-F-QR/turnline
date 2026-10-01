@@ -66,7 +66,7 @@ Hover mode is off by default. When enabled, entering the toggle opens the outlin
 
 Turnline reads the conversation DOM. On ChatGPT, opening the outline starts a history scan toward older messages. The scan retains discovered messages, waits for unloaded content, and restores your reading position afterward. You can stop or retry it with the history control. Interacting with the chat takes control back from the scan.
 
-**A finished scan means no more messages were found in the page; it does not guarantee that the provider has returned the entire conversation.** Copy and export describe the discovered range. An interrupted scan reports why it is incomplete. JSON exports distinguish a finished scan (`scanStatus: "finished"`, `complete: null`) from an unfinished one (`complete: false`).
+**A finished scan means no more messages were found in the page; it does not guarantee that the provider has returned the entire conversation.** Copy and export describe the discovered range. ChatGPT JSON copies and exports distinguish a finished scan (`scanStatus: "finished"`, `complete: null`) from every unfinished state (`idle`, `scanning`, `partial`, `cancelled`, or `failed`, with `complete: false`). The `reason` field records why the scan stopped or what it is doing. A cancelled or failed export scan stops the download; copying JSON still describes the currently discovered range.
 
 All three providers show the discovered message count, with each prompt and response counted separately. Claude and Gemini use the messages detected on the page; automatic history discovery is currently specific to ChatGPT. Navigation to a message that has been removed from the DOM attempts to load it again on ChatGPT and reports when it is unavailable.
 

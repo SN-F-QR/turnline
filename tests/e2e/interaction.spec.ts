@@ -1,10 +1,19 @@
 import { readFile } from 'node:fs/promises';
+import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 
 async function open(page: import('@playwright/test').Page) {
     await page.getByRole('button', { name: 'Toggle outline' }).click();
     return page.getByRole('complementary', { name: 'Turnline outline' });
+}
+
+async function copyCoverage(page: Page, sidebar: Locator) {
+    await page.evaluate(() => navigator.clipboard.writeText(''));
+    await sidebar.locator('[data-action="copy-format"]').click({ button: 'right' });
+    await page.getByRole('button', { name: /^JSON/ }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('"coverage"');
+    return JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).coverage;
 }
 
 test('reading follows a short final section at the bottom without changing the first prompt alignment', async ({ extensionContext, extensionPage: page }) => {
@@ -85,12 +94,16 @@ test('F10 latest click wins and wheel cancels the running animation', async ({ e
 });
 
 test('F15 cancellation restores reading position and export can be retried', async ({ extensionContext, extensionPage: page }) => {
+    await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
     await loadScenario(extensionContext, page, 'long-response-l01');
     const initial = await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop);
     const sidebar = await open(page);
     await sidebar.getByRole('button', { name: 'Stop refreshing history' }).click();
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(initial);
+    expect(await copyCoverage(page, sidebar)).toMatchObject({
+        complete: false, scanStatus: 'cancelled', reason: 'History scan cancelled',
+    });
     await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
     await page.getByRole('button', { name: /^JSON/ }).click();
     let downloads = 0;
@@ -103,8 +116,7 @@ test('F15 cancellation restores reading position and export can be retried', asy
     await sidebar.locator('[data-action="export-format"]').click();
     const data = JSON.parse(await readFile(await (await download).path(), 'utf8'));
     expect(data.turns).toHaveLength(5);
-    expect(data.coverage.complete).toBeNull();
-    expect(data.coverage.scanStatus).toBe('finished');
+    expect(data.coverage).toMatchObject({ complete: null, scanStatus: 'finished', reason: 'No more messages found' });
     await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveCount(0);
     await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(initial);
 });
@@ -144,9 +156,9 @@ test('F15 continued discovery reaches a bounded timeout and clears busy [synthet
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible({ timeout: 20000 });
     await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toHaveCount(0);
     await expect(sidebar.getByRole('status')).toContainText('messages discovered');
-    await sidebar.locator('[data-action="copy-format"]').click({ button: 'right' });
-    await page.getByRole('button', { name: /^JSON/ }).click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/"scanStatus"\s*:\s*"partial"/);
+    expect(await copyCoverage(page, sidebar)).toMatchObject({
+        complete: false, scanStatus: 'partial', reason: 'History scan timed out',
+    });
 });
 
 test('F15 settled discovery shows a count and refresh action', async ({ extensionContext, extensionPage: page }) => {
@@ -165,11 +177,12 @@ test('F15 settled discovery shows a count and refresh action', async ({ extensio
     await page.getByRole('button', { name: /^JSON/ }).click();
     await page.getByRole('button', { name: 'Allow scrolling' }).click();
     const data = JSON.parse(await readFile(await (await download).path(), 'utf8'));
-    expect(data.coverage).toMatchObject({ complete: null, scanStatus: 'finished' });
+    expect(data.coverage).toMatchObject({ complete: null, scanStatus: 'finished', reason: 'No more messages found' });
     expect(data.coverage.description).toContain('Full history not verified');
 });
 
-test('F15 missing content hydrates on refresh [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
+test('partial history hydrates on refresh and reports why the earlier scan was incomplete [synthetic placeholder]', async ({ extensionContext, extensionPage: page }) => {
+    await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const original = await page.locator('[data-markdown-text-style]').first().evaluate(content => {
         const html = content.innerHTML;
@@ -181,9 +194,20 @@ test('F15 missing content hydrates on refresh [synthetic placeholder]', async ({
     const sidebar = await open(page);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
-    await page.locator('[data-markdown-text-style]').first().evaluate((content, html) => { content.innerHTML = html; }, original);
+    expect(await copyCoverage(page, sidebar)).toMatchObject({
+        complete: false, scanStatus: 'partial', reason: 'Some discovered content did not load',
+    });
+    await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
+    await page.locator('.thread-scroll-container').evaluate((scroller, html) => {
+        scroller.addEventListener('scroll', () => {
+            scroller.querySelector('[data-markdown-text-style]')!.innerHTML = html;
+        }, { once: true });
+    }, original);
     await sidebar.getByRole('button', { name: 'Refresh history' }).click();
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
     await expect(sidebar.getByRole('status')).toContainText('4 messages discovered');
     await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
+    expect(await copyCoverage(page, sidebar)).toMatchObject({
+        complete: null, scanStatus: 'finished', reason: 'No more messages found',
+    });
 });

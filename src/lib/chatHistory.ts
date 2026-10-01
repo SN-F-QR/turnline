@@ -2,7 +2,7 @@ import type { Turn } from '../types';
 import { cancelScroll, findScrollable } from './scroll';
 
 export type HistoryStatus = 'idle' | 'scanning' | 'finished' | 'partial' | 'cancelled' | 'failed';
-export type HistoryResult = { turns: Turn[]; status: HistoryStatus; reason: string; complete: null };
+export type HistoryResult = { turns: Turn[]; status: HistoryStatus; reason: string };
 export type HistorySnapshot = { live: Turn[]; turns: Turn[] };
 
 const delay = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => {
@@ -14,18 +14,6 @@ const delay = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => 
 const scrollerFor = (live: Turn[]) => findScrollable(live.find(t => t.element.isConnected)?.element || document.querySelector('main'));
 const topEdge = (el: HTMLElement) => getComputedStyle(el).flexDirection === 'column-reverse' ? -(el.scrollHeight - el.clientHeight) : 0;
 const move = (el: HTMLElement, top: number) => el.scrollTo({ top, behavior: 'instant' });
-
-export function describeHistory(history: Pick<HistoryResult, 'status'>, count: number) {
-    return `${count} messages discovered${history.status === 'scanning' ? ' · Refreshing…' : ''}`;
-}
-
-export function getHistoryCoverage(history: HistoryResult, count: number) {
-    return {
-        complete: history.complete,
-        scanStatus: history.status,
-        description: `${count} messages discovered. Full history not verified.`,
-    };
-}
 
 // Finishing the DOM scan is distinct from verifying the first server-side
 // message. A settled edge completes the scan; overall coverage remains unknown.
@@ -42,7 +30,7 @@ export async function discoverChatHistory(read: (direction?: 'older' | 'newer') 
     let status: HistoryStatus = 'partial';
     let reason = 'History scan timed out';
     let snapshot = initial;
-    if (!initial.live.length) return { turns: initial.turns, status: 'failed', reason: 'No chat content is available', complete: null };
+    if (!initial.live.length) return { turns: initial.turns, status: 'failed', reason: 'No chat content is available' };
     const active = () => !signal.aborted && location.href === url;
     try {
         let quietSince = performance.now();
@@ -127,5 +115,5 @@ export async function discoverChatHistory(read: (direction?: 'older' | 'newer') 
         }
     }
     if (!active()) { status = 'cancelled'; reason = 'History scan cancelled'; }
-    return { turns: location.href === url ? read().turns : snapshot.turns, status, reason, complete: null };
+    return { turns: location.href === url ? read().turns : snapshot.turns, status, reason };
 }

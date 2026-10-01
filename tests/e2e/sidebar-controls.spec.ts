@@ -334,3 +334,49 @@ test('hover stays open during toggle dragging and resizing and resumes closing o
     await page.mouse.up();
     await expect(sidebar).toBeHidden();
 });
+
+test('moving the toggle cleans host styles on cancel, close and unmount', async ({ extensionContext, extensionPage: page }) => {
+    await loadScenario(extensionContext, page, 'current-turn-unit');
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    await page.evaluate(() => { document.body.style.cursor = 'crosshair'; document.body.style.userSelect = 'text'; });
+    for (const action of ['cancel', 'close', 'unmount']) {
+        const toggle = page.getByRole('button', { name: 'Toggle outline' });
+        await toggle.hover();
+        await page.mouse.down();
+        await expect(page.locator('.scroll-pro-sidebar-shell')).toHaveClass(/is-dragging/);
+        await page.mouse.move(800, 200);
+        await expect.poll(() => page.evaluate(() => document.body.style.cursor)).toBe('grabbing');
+        if (action === 'cancel') await toggle.dispatchEvent('pointercancel', { pointerId: 1 });
+        if (action === 'close') await page.keyboard.press(process.platform === 'darwin' ? 'Meta+;' : 'Control+;');
+        if (action === 'unmount') await page.evaluate(() => { history.replaceState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); });
+        await expect.poll(() => page.evaluate(() => [document.body.style.cursor, document.body.style.userSelect])).toEqual(['crosshair', 'text']);
+        await page.mouse.up();
+        if (action === 'close') await toggle.click();
+    }
+});
+
+test('prompt collapse hides only its answer outline and preserves it across settings and reopening', async ({ extensionContext, extensionPage: page }) => {
+    await loadScenario(extensionContext, page, 'current-turn-unit');
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
+    const first = sidebar.locator('[data-block-key]').first();
+    const last = sidebar.locator('[data-block-key]').last();
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(2);
+    await expect(last.locator('.scroll-pro-subheading')).toHaveCount(1);
+    await expect(first.locator('.scroll-pro-collapse-btn')).toHaveCount(1);
+    const position = await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop);
+    await first.getByRole('button', { name: 'Collapse answer outline' }).click();
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(0);
+    await expect(last.locator('.scroll-pro-subheading')).toHaveCount(1);
+    expect(await page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(position);
+    await sidebar.getByRole('button', { name: 'Outline settings' }).click();
+    await sidebar.getByRole('button', { name: 'Back to outline' }).click();
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const expand = first.getByRole('button', { name: 'Expand answer outline' });
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await expand.focus();
+    await page.keyboard.press('Space');
+    await expect(first.locator('.scroll-pro-subheading')).toHaveCount(2);
+    await expect(first.getByRole('button', { name: 'Collapse answer outline' })).toHaveAttribute('aria-expanded', 'true');
+});

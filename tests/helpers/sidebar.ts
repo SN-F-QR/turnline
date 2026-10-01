@@ -1,4 +1,12 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+
+export async function openOutline(page: Page) {
+    await expect(page.locator('#scroll-pro-root')).toBeAttached();
+    await page.getByRole('button', { name: 'Toggle outline' }).click();
+    const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
+    await expect(sidebar).toBeVisible();
+    return sidebar;
+}
 
 export async function dragOutlineWidth(page: Page, width: number) {
     const handle = page.getByRole('separator', { name: 'Outline width' });

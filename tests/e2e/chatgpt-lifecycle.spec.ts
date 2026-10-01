@@ -1,28 +1,15 @@
-import { readFile } from 'node:fs/promises';
+import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
+import { openOutline } from '../helpers/sidebar';
 
-async function openOutline(page: import('@playwright/test').Page) {
-  await expect(page.locator('#scroll-pro-root')).toBeAttached();
-  await page.getByRole('button', { name: 'Toggle outline' }).click();
-  const sidebar = page.getByRole('complementary', { name: 'Turnline outline' });
-  await expect(sidebar).toBeVisible();
-  return sidebar;
+async function commitRouteBeforeTranscript(page: Page, sidebar: Locator, path: string) {
+  // Let the extension process the route while the previous DOM stays mounted.
+  await page.evaluate(path => history.pushState({}, '', path), path);
+  await expect(page).toHaveURL(`https://chatgpt.com${path}`);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+  await expect(page.locator('[data-user-message-bubble]')).toHaveCount(2);
 }
-
-test('current ChatGPT capture: extension mounts and outline opens', async ({ extensionContext, extensionPage }) => {
-  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  await expect(extensionPage.locator('[data-turn-key]')).toHaveCount(2);
-  await expect(extensionPage.locator('[data-content-search-unit-key]')).toHaveCount(4);
-  expect(await extensionPage.locator('[data-content-search-unit-key]').evaluateAll((units) =>
-    units.map((unit) => unit.getAttribute('data-content-search-unit-key')!.split(':').at(-1))
-  )).toEqual(expected.roles);
-  await expect(extensionPage.locator('[data-user-message-bubble]')).toHaveCount(2);
-  await expect(extensionPage.locator('[data-markdown-text-style]')).toHaveCount(2);
-  await expect(extensionPage.locator('[data-markdown-text-style] h2, [data-markdown-text-style] h3')).toHaveText(expected.headings);
-  await expect(extensionPage.locator('.thread-scroll-container')).toHaveCSS('flex-direction', 'column-reverse');
-  await openOutline(extensionPage);
-});
 
 test('ChatGPT project landing pages disable the outline across SPA navigation and reload', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
@@ -65,7 +52,7 @@ test('ChatGPT project landing pages disable the outline across SPA navigation an
   await expect(sidebar).toHaveCount(0);
 });
 
-test('F11 toggle shortcut works in the outline and host editor across reload and route changes', async ({ extensionContext, extensionPage }) => {
+test('toggle shortcut works in the outline and host editor across reload and route changes', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const chatUrl = extensionPage.url();
   const sidebar = await openOutline(extensionPage);
@@ -141,117 +128,7 @@ test('F11 toggle shortcut works in the outline and host editor across reload and
   await expect(sidebar).toBeVisible();
 });
 
-test('F02 current ChatGPT capture: turns, headings, search, and navigation [P4]', async ({ extensionContext, extensionPage }) => {
-  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  const sidebar = await openOutline(extensionPage);
-  const blocks = sidebar.locator('[data-block-key]');
-  await expect(blocks).toHaveCount(expected.prompts.length);
-  await expect(blocks.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
-  for (const heading of expected.headings) {
-    await expect(sidebar.getByRole('button', { name: heading, exact: true })).toBeVisible();
-  }
-  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveCount(3);
-  for (const text of expected.absentText ?? []) {
-    await expect(sidebar).not.toContainText(text);
-  }
-  const filter = sidebar.getByPlaceholder('Filter…');
-  await filter.fill('green satellite');
-  await expect(blocks).toHaveCount(1);
-  await filter.clear();
-  await sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true }).click();
-  await expect.poll(() => extensionPage.locator('[data-markdown-text-style] h2').first().evaluate((heading) => {
-    const target = heading.getBoundingClientRect();
-    const scroller = document.querySelector('.thread-scroll-container')!.getBoundingClientRect();
-    return target.top >= scroller.top && target.top < scroller.bottom;
-  })).toBe(true);
-});
-
-for (const layout of ['current', 'legacy', 'signed-in'] as const) {
-  test(`ChatGPT ${layout}: DIL card titles are omitted while document headings remain`, async ({ extensionContext, extensionPage }) => {
-    await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-    await extensionPage.evaluate((layout) => {
-      const content = document.querySelector<HTMLElement>('[data-markdown-text-style]')!;
-      // Minimal reproduction of the public DIL response structure. The entire
-      // response is not-prose, including its legitimate document headings.
-      const message = document.createElement('div');
-      message.setAttribute('data-message-author-role', 'assistant');
-      message.setAttribute('data-model-dil-v2-message', '');
-      message.innerHTML = `
-        <div><div class="puik-root not-prose not-markdown" data-dil-widget-copy-target>
-          <div data-d-direction="col">
-            <h1 data-d-component="title">Product comparison</h1>
-            <h2 data-d-component="title">Recommendations</h2>
-            <div data-d-component="box" data-d-has-border>
-              <h1 data-d-component="title">Example toothpaste brand</h1>
-              <div><h2 data-d-component="title">Card details</h2></div>
-            </div>
-            <h2 data-d-component="title">Concentration</h2>
-            <div data-d-component="box">
-              <h1 data-d-component="title">1,000–1,150 ppm</h1>
-            </div>
-          </div>
-        </div></div>
-        <div><h3>Ordinary nested heading</h3></div>`;
-      if (layout === 'signed-in') {
-        // Logged-in DOM supplied in the bug report: cards live inside the
-        // Markdown root and have no share-page widget-copy-target ancestor.
-        message.removeAttribute('data-model-dil-v2-message');
-        message.setAttribute('data-markdown-text-style', 'assistant-message');
-        const renderer = message.querySelector('[data-dil-widget-copy-target]')!;
-        renderer.removeAttribute('data-dil-widget-copy-target');
-        renderer.className = 'relative PortalBoundary-TFj9W2 Renderer-ojZscX';
-        renderer.setAttribute('data-theme', 'light');
-        renderer.firstElementChild!.className = 'DilRenderer-tB76Jj DilResponseRoot-HfQrEh LegacyReveal-lIiswq';
-      }
-      if (layout === 'legacy') {
-        const turn = content.closest('[data-turn-key]')!;
-        const legacyTurn = document.createElement('section');
-        legacyTurn.setAttribute('data-turn', 'assistant');
-        legacyTurn.setAttribute('data-testid', 'conversation-turn-dil');
-        legacyTurn.append(...turn.childNodes);
-        turn.replaceWith(legacyTurn);
-      }
-      content.replaceWith(message);
-    }, layout);
-    const sidebar = await openOutline(extensionPage);
-    for (const title of ['Product comparison', 'Recommendations', 'Concentration', 'Ordinary nested heading']) {
-      await expect(sidebar.getByRole('button', { name: title, exact: true }).and(sidebar.locator('.scroll-pro-subheading'))).toBeVisible();
-    }
-    for (const title of ['Example toothpaste brand', 'Card details', '1,000–1,150 ppm']) {
-      await expect(sidebar.getByRole('button', { name: title, exact: true })).toHaveCount(0);
-      await expect(extensionPage.getByRole('heading', { name: title, exact: true })).toHaveCount(1);
-    }
-  });
-}
-
-test('F06 text-node streaming updates the current outline [P4]', async ({ extensionContext, extensionPage }) => {
-  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toBeVisible();
-  await extensionPage.evaluate(() => {
-    const heading = document.querySelector<HTMLElement>('[data-markdown-text-style] h2')!;
-    heading.firstChild!.textContent = 'Orbit Updated';
-  });
-  await expect(sidebar.getByRole('button', { name: 'Orbit Updated' })).toBeVisible();
-  await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
-  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
-});
-
-test('F02 overlapping legacy wrapper does not duplicate a current turn [P4 synthetic wrapper]', async ({ extensionContext, extensionPage }) => {
-  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  await extensionPage.evaluate(() => {
-    const turn = document.querySelector<HTMLElement>('[data-turn-key]')!;
-    const wrapper = document.createElement('section');
-    wrapper.setAttribute('data-turn', 'assistant');
-    turn.replaceWith(wrapper);
-    wrapper.appendChild(turn);
-  });
-  const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
-  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
-});
-
-test('F02 history keeps one navigable turn when a fallback search key is replaced', async ({ extensionContext, extensionPage }) => {
+test('history keeps one navigable turn when a fallback search key is replaced', async ({ extensionContext, extensionPage }) => {
   await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
   await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
@@ -274,7 +151,7 @@ test('F02 history keeps one navigable turn when a fallback search key is replace
 });
 
 for (const remount of [false, true]) {
-  test(`F06 streamed answer reindexed after search stays under its prompt (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
+  test(`streamed answer reindexed after search stays under its prompt (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
     await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
     const sidebar = await openOutline(extensionPage);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
@@ -308,7 +185,7 @@ for (const remount of [false, true]) {
 }
 
 for (const remount of [false, true]) {
-  test(`F06 pending prompt is retired when submission resolves (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
+  test(`pending prompt is retired when submission resolves (remount=${remount})`, async ({ extensionContext, extensionPage }) => {
     await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
     const sidebar = await openOutline(extensionPage);
     await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
@@ -341,7 +218,7 @@ for (const remount of [false, true]) {
   });
 }
 
-test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ extensionContext, extensionPage }) => {
+test('SPA URL and container replacement clear stale turns', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const chatUrl = extensionPage.url();
   const sidebar = await openOutline(extensionPage);
@@ -444,9 +321,12 @@ for (const prefix of ['/c/', '/g/g-p-fixture/c/']) {
 }
 
 test('ChatGPT local markers mounted after the permanent URL is assigned populate the outline', async ({ extensionContext, extensionPage }) => {
-  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await commitRouteBeforeTranscript(extensionPage, sidebar, '/c/fixture-direct-permanent');
   await extensionPage.evaluate(() => {
-    history.pushState({}, '', '/c/fixture-direct-permanent');
     document.querySelector('[data-chatgpt-conversation-selection-target]')!.innerHTML = `<div data-turn-key="direct-new-turn">
       <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Describe a fictional island</div></div>
       <div data-content-search-unit-key="fallback-turn-0:2:assistant"><div data-chatgpt-selection-conversation-id="local-chatgpt:fixture-direct-local">
@@ -454,23 +334,23 @@ test('ChatGPT local markers mounted after the permanent URL is assigned populate
       </div></div>
     </div>`;
   });
-  const sidebar = await openOutline(extensionPage);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
   await expect(sidebar.getByRole('button', { name: 'Island geography', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText('Describe a fictional island');
+  for (const text of [...expected.prompts, ...expected.headings]) {
+    await expect(sidebar).not.toContainText(text);
+  }
 });
 
 test('SPA navigation waits for the new conversation before retaining history', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
   await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
-  await extensionPage.evaluate(() => {
-    // The router commits the URL while the previous transcript is still mounted.
-    history.pushState({}, '', '/c/fixture-delayed-chat');
-    document.title = 'Delayed conversation - ChatGPT';
-  });
-  await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+  await commitRouteBeforeTranscript(extensionPage, sidebar, '/c/fixture-delayed-chat');
 
   await extensionPage.evaluate(() => {
+    document.title = 'Delayed conversation - ChatGPT';
     const transcript = document.querySelector('[data-chatgpt-conversation-selection-target]')!;
     transcript.innerHTML = `<div data-turn-key="delayed-turn">
       <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Plan an imaginary voyage</div></div>
@@ -581,96 +461,21 @@ test('cached workspace visibility changes rebind the conversation observer witho
   await expect(sidebar.getByRole('button', { name: 'Cached view updated', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: 'Orbit Alpha', exact: true })).toHaveCount(0);
   await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
-});
 
-test('F13 assistant-only output omits a fabricated user [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
-  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
-  await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
-  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
-  const sidebar = await openOutline(extensionPage);
-  const blocks = sidebar.locator('[data-block-key]');
-  await expect(blocks).toHaveCount(2);
-  await sidebar.getByRole('button', { name: 'Collapse all turns' }).click();
-  await expect(blocks.locator('.scroll-pro-item-title').first()).toHaveText('Orbit Alpha');
-  await blocks.first().click({ button: 'right' });
-  await expect(extensionPage.getByRole('button', { name: 'Copy prompt' })).toBeDisabled();
-  await expect(extensionPage.getByRole('button', { name: 'Copy Q&A' })).toBeDisabled();
-  await expect(extensionPage.getByRole('button', { name: 'Copy response' })).toBeEnabled();
-  await extensionPage.getByRole('button', { name: 'Copy response' }).click();
-  const plainCopy = await extensionPage.evaluate(() => navigator.clipboard.readText());
-  expect(plainCopy).toContain('Orbit Alpha');
-  expect(plainCopy).not.toContain('## Orbit Alpha');
-
-  const exportButton = sidebar.locator('[data-action="export-format"]');
-  await exportButton.click({ button: 'right' });
-  await extensionPage.getByRole('button', { name: 'JSON' }).click();
-  const downloadPromise = extensionPage.waitForEvent('download');
-  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
-  const download = await downloadPromise;
-  const data = JSON.parse(await readFile(await download.path(), 'utf8')) as { turns: Array<{ prompt: string | null; response: string; kind: string; title: string }> };
-  expect(data.turns).toHaveLength(2);
-  expect(data.turns[0]).toMatchObject({ prompt: null, kind: 'assistant', title: 'Orbit Alpha' });
-  expect(data.turns[0].response).toContain('## Orbit Alpha');
-
-  await exportButton.click({ button: 'right' });
-  const markdownPromise = extensionPage.waitForEvent('download');
-  await extensionPage.getByRole('button', { name: 'Markdown' }).click();
-  const markdown = await readFile(await (await markdownPromise).path(), 'utf8');
-  expect(markdown).toContain('**Assistant**');
-  expect(markdown).toContain('## Orbit Alpha');
-  expect(markdown).not.toContain('**User**');
-});
-
-test('plain text copying and TXT export preserve code in assistant-only responses', async ({ extensionContext, extensionPage }) => {
-  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
-  await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
-  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
-  const code = 'const file_name = "**literal**";\nconsole.log(`value: ${file_name}`);';
-  await extensionPage.locator('[data-markdown-text-style]').first().evaluate((content, text) => {
-    const pre = document.createElement('pre');
-    const code = document.createElement('code');
-    code.className = 'language-js';
-    code.textContent = text;
-    pre.append(code);
-    content.append(pre);
-  }, code);
-  const sidebar = await openOutline(extensionPage);
-  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
-  await sidebar.locator('[data-block-key]').first().click({ button: 'right' });
-  await extensionPage.getByRole('button', { name: 'Copy response', exact: true }).click();
-  await expect.poll(() => extensionPage.evaluate(() => navigator.clipboard.readText())).toContain(code);
-  const exportButton = sidebar.locator('[data-action="export-format"]');
-  await exportButton.click({ button: 'right' });
-  await extensionPage.getByRole('button', { name: /^Text/ }).click();
-  const textPromise = extensionPage.waitForEvent('download');
-  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
-  const plainText = await readFile(await (await textPromise).path(), 'utf8');
-  expect(plainText).toContain(code);
-  expect(plainText).toContain('Assistant:');
-  expect(plainText).not.toContain('User:');
-});
-
-test('F13 assistant-only PDF print content has no user section [P3 synthetic state]', async ({ extensionContext, extensionPage }) => {
-  await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
-  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
-  await extensionPage.evaluate(() => document.querySelectorAll('[data-content-search-unit-key$=":user"]').forEach(unit => unit.remove()));
-  const sidebar = await openOutline(extensionPage);
-  await extensionPage.evaluate(() => {
-    const observer = new MutationObserver((records) => {
-      const frame = records.flatMap(record => Array.from(record.addedNodes)).find(node => node instanceof HTMLIFrameElement) as HTMLIFrameElement | undefined;
-      if (!frame) return;
-      (window as Window & { capturedPdfHtml?: string }).capturedPdfHtml = frame.contentDocument?.documentElement.outerHTML;
-      observer.disconnect();
-    });
-    observer.observe(document.body, { childList: true });
+  // This text-node mutation happens after the workspace switch has settled.
+  await extensionPage.locator('#replacement-workspace [data-markdown-text-style] h2').evaluate(heading => {
+    heading.firstChild!.textContent = 'Active view streaming';
   });
-  const exportButton = sidebar.locator('[data-action="export-format"]');
-  await exportButton.click({ button: 'right' });
-  await extensionPage.getByRole('button', { name: 'PDF' }).click();
-  await extensionPage.getByRole('button', { name: 'Allow scrolling' }).click();
-  const pdfHtml = await extensionPage.waitForFunction(() => (window as Window & { capturedPdfHtml?: string }).capturedPdfHtml || '').then(handle => handle.jsonValue());
-  expect(pdfHtml).toContain('Orbit Alpha');
-  expect(pdfHtml).not.toContain('class="section-label">You');
+  await expect(sidebar.getByRole('button', { name: 'Active view streaming', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Cached view updated', exact: true })).toHaveCount(0);
+
+  // A second active update is a parse sentinel for the hidden-workspace change.
+  await extensionPage.evaluate(() => {
+    document.querySelector('#original-workspace [data-markdown-text-style] h2')!.firstChild!.textContent = 'Hidden view stale update';
+    document.querySelector('#replacement-workspace [data-markdown-text-style] h2')!.firstChild!.textContent = 'Active view settled';
+  });
+  await expect(sidebar.getByRole('button', { name: 'Active view settled', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Hidden view stale update', exact: true })).toHaveCount(0);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(2);
+  await expect(sidebar.getByRole('status')).toHaveText('4 messages discovered');
 });

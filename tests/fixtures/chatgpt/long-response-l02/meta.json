@@ -1,6 +1,6 @@
 {
   "scenario": "F04/F05",
-  "source": "Real logged-in ChatGPT conversation supplied by the user; see L01/L02 in docs/chatgpt-cleanup-repair-plan.md",
+  "source": "Real logged-in ChatGPT conversation supplied by the user; L02 capture described in tests/fixtures/chatgpt/README.md",
   "capturedAt": [
     "2026-09-25T23:52:13.780Z"
   ],
