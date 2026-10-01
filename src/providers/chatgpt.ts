@@ -8,6 +8,7 @@ export const isChatGptChatPage = (path: string): boolean => {
 };
 
 const nodeIds = new WeakMap<HTMLElement, number>();
+const localConversationIds = new Map<string, string>();
 let nextNodeId = 0;
 const fallbackId = (node: HTMLElement) => {
     if (!nodeIds.has(node)) nodeIds.set(node, ++nextNodeId);
@@ -48,7 +49,9 @@ export const chatgpt: Provider = {
     getTurns: (container: HTMLElement): Turn[] => {
         const turns: Turn[] = [];
         const seenIds = new Set<string>();
-        const conversationId = window.location.pathname.match(/\/c\/([^/]+)/)?.[1];
+        const routeId = window.location.pathname.match(/\/c\/([^/]+)/)?.[1];
+        const localRoute = /^local-chatgpt(?::|%3A)/i.test(routeId || '');
+        const conversationId = routeId?.replace(/^local-chatgpt(?::|%3A)/i, '');
         const candidates = Array.from(container.querySelectorAll<HTMLElement>(CHATGPT_TURN_SELECTOR)).filter(root => {
             // ChatGPT keeps inactive workspaces mounted, and commits the new URL
             // before hiding the old transcript. Neither belongs in the new history.
@@ -56,8 +59,15 @@ export const chatgpt: Provider = {
             const transcript = root.closest('[data-chatgpt-conversation-selection-target]') || root;
             const marker = root.querySelector('[data-chatgpt-selection-conversation-id]')
                 || transcript.querySelector('[data-chatgpt-selection-conversation-id]');
-            const id = marker?.getAttribute('data-chatgpt-selection-conversation-id')?.replace(/^local-chatgpt:/, '');
-            return !conversationId || !id || id === conversationId;
+            const id = marker?.getAttribute('data-chatgpt-selection-conversation-id');
+            if (!conversationId || !id) return true;
+            if (!id.startsWith('local-chatgpt:')) return id === conversationId;
+            if (localRoute) return id.slice('local-chatgpt:'.length) === conversationId;
+            // A new chat keeps its local selection ID after the URL gets a
+            // permanent ID. Remember that assignment across cached workspaces
+            // so subsequent navigation cannot associate it with a different chat.
+            if (!localConversationIds.has(id)) localConversationIds.set(id, conversationId);
+            return localConversationIds.get(id) === conversationId;
         });
         const validModern = candidates.filter(root => root.hasAttribute('data-turn-key') &&
             Array.from(root.querySelectorAll<HTMLElement>('[data-content-search-unit-key]')).some(unit => {

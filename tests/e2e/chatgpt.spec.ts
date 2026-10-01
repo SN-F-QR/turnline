@@ -380,6 +380,85 @@ test('F08 SPA URL and container replacement clear stale turns [P4]', async ({ ex
   await expect(extensionPage.getByRole('button', { name: 'Toggle outline' })).toBeVisible();
 });
 
+for (const prefix of ['/c/', '/g/g-p-fixture/c/']) {
+  test(`new ChatGPT submissions survive local-to-permanent conversation IDs (${prefix})`, async ({ extensionContext, extensionPage }) => {
+    const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+    const originalUrl = extensionPage.url();
+    const sidebar = await openOutline(extensionPage);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await extensionPage.evaluate(prefix => {
+      const main = document.querySelector('main')!;
+      const cached = document.createElement('div');
+      cached.id = 'cached-before-submit';
+      main.replaceWith(cached);
+      cached.append(main);
+      cached.style.display = 'none';
+      const active = document.createElement('div');
+      active.id = 'new-submission-workspace';
+      active.innerHTML = `<main><div class="thread-scroll-container"><div data-chatgpt-conversation-selection-target>
+        <div data-turn-key="pending-chatgpt-submit">
+          <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Describe a fictional comet</div></div>
+          <div data-content-search-unit-key="fallback-turn-0:2:assistant"><div data-chatgpt-selection-conversation-id="local-chatgpt:fixture-local-submission">
+            <div data-markdown-text-style="assistant-message"><h2>Comet overview</h2><p>Streaming text.</p></div>
+          </div></div>
+        </div>
+      </div></div></main>`;
+      document.body.append(active);
+      history.pushState({}, '', `${prefix}local-chatgpt%3Afixture-local-submission`);
+    }, prefix);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await expect(sidebar.getByRole('button', { name: 'Comet overview', exact: true })).toBeVisible();
+
+    // Promotion changes the URL while the selection marker remains local.
+    await extensionPage.evaluate(prefix => history.replaceState({}, '', `${prefix}fixture-permanent-submission`), prefix);
+    await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await extensionPage.evaluate(() => {
+      const turn = document.querySelector('#new-submission-workspace [data-turn-key]')!;
+      turn.setAttribute('data-turn-key', 'submitted-comet-turn');
+      turn.querySelector('[data-markdown-text-style]')!.insertAdjacentHTML('beforeend', '<h2>Comet tail</h2><p>Completed answer.</p>');
+    });
+    await expect(sidebar.getByRole('button', { name: 'Comet tail', exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
+
+    // Navigating away must reject this already assigned local transcript even
+    // before the host hides it, or history discovery would retain stale turns.
+    await extensionPage.evaluate(url => history.pushState({}, '', url), originalUrl);
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(0);
+    await extensionPage.evaluate(() => {
+      document.querySelector<HTMLElement>('#cached-before-submit')!.style.removeProperty('display');
+      document.querySelector<HTMLElement>('#new-submission-workspace')!.style.display = 'none';
+    });
+    await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+    await expect(sidebar).not.toContainText('Comet overview');
+
+    await extensionPage.evaluate(() => {
+      document.querySelector<HTMLElement>('#cached-before-submit')!.style.display = 'none';
+      document.querySelector<HTMLElement>('#new-submission-workspace')!.style.removeProperty('display');
+      history.back();
+    });
+    await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+    await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText('Describe a fictional comet');
+    await expect(sidebar.getByRole('button', { name: 'Comet tail', exact: true })).toBeVisible();
+  });
+}
+
+test('ChatGPT local markers mounted after the permanent URL is assigned populate the outline', async ({ extensionContext, extensionPage }) => {
+  await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
+  await extensionPage.evaluate(() => {
+    history.pushState({}, '', '/c/fixture-direct-permanent');
+    document.querySelector('[data-chatgpt-conversation-selection-target]')!.innerHTML = `<div data-turn-key="direct-new-turn">
+      <div data-content-search-unit-key="fallback-turn-0:0:user"><div data-user-message-bubble>Describe a fictional island</div></div>
+      <div data-content-search-unit-key="fallback-turn-0:2:assistant"><div data-chatgpt-selection-conversation-id="local-chatgpt:fixture-direct-local">
+        <div data-markdown-text-style="assistant-message"><h2>Island geography</h2></div>
+      </div></div>
+    </div>`;
+  });
+  const sidebar = await openOutline(extensionPage);
+  await expect(sidebar.locator('[data-block-key]')).toHaveCount(1);
+  await expect(sidebar.getByRole('button', { name: 'Island geography', exact: true })).toBeVisible();
+});
+
 test('SPA navigation waits for the new conversation before retaining history', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   const sidebar = await openOutline(extensionPage);
