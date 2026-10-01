@@ -1,1 +1,3 @@
 Synthetic minimal compatibility fixture for shared outline settings only. Not a current-site DOM capture or evidence of live Claude support. Browser tests also insert the shared `../outline-hierarchy.json` scenarios into these wrappers to cover H1–H6 extraction and per-response depth.
+
+`tests/e2e/claude-dom.spec.ts` adds three inline synthetic DOM contracts for response-only extraction from thinking grids, nested selector deduplication and longest-candidate selection, and the supported streaming-container fallback with stable message IDs. These run the bundled production parser in Chromium without loading the extension; they are not live-site captures. Shadow DOM, observation and shared settings remain covered by the extension tests.

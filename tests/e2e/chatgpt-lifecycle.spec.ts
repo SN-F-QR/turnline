@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
@@ -363,6 +364,71 @@ test('SPA navigation waits for the new conversation before retaining history', a
   for (const text of [...expected.prompts, ...expected.headings]) {
     await expect(sidebar).not.toContainText(text);
   }
+});
+
+test('switching conversations during an export cancels the old scan and preserves the new reading position', async ({ extensionContext, extensionPage: page }) => {
+  const expected = await loadScenario(extensionContext, page, 'current-turn-unit');
+  const sidebar = await openOutline(page);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  const oldPosition = await page.locator('.thread-scroll-container').evaluate(scroller => {
+    scroller.scrollTop = -120;
+    return scroller.scrollTop;
+  });
+  expect(oldPosition).toBe(-120);
+
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  await sidebar.locator('[data-action="export-format"]').click({ button: 'right' });
+  await page.getByRole('button', { name: /^JSON/ }).click();
+  await page.getByRole('button', { name: 'Allow scrolling' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toBeVisible();
+  await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBeLessThan(oldPosition);
+
+  // Reuse the same scroller so restoring old coordinates would move the new chat.
+  const newPosition = await page.evaluate(() => {
+    history.pushState({}, '', '/c/fixture-scan-switch');
+    document.title = 'New scan conversation - ChatGPT';
+    const scroller = document.querySelector<HTMLElement>('.thread-scroll-container')!;
+    scroller.querySelector('[data-chatgpt-conversation-selection-target]')!.innerHTML = `<div data-turn-key="new-scan-turn">
+      <div data-content-search-unit-key="new-scan:0:user"><div data-user-message-bubble>Describe a fictional moon</div></div>
+      <div data-content-search-unit-key="new-scan:1:assistant"><div data-chatgpt-selection-conversation-id="fixture-scan-switch">
+        <div data-markdown-text-style="assistant-message"><h2>New moon itinerary</h2><p style="min-height:2000px">Only the new conversation belongs in this export.</p></div>
+      </div></div>
+    </div>`;
+    scroller.scrollTop = -420;
+    return scroller.scrollTop;
+  });
+  expect(newPosition).toBe(-420);
+  expect(newPosition).not.toBe(oldPosition);
+  await expect(page).toHaveURL('https://chatgpt.com/c/fixture-scan-switch');
+  // The toast confirms the old export has resumed from its cancelled scan.
+  await expect(page.getByText('History scan cancelled', { exact: true })).toBeVisible();
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText('Describe a fictional moon');
+  await expect(sidebar.getByRole('button', { name: 'New moon itinerary', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await expect(sidebar.getByRole('status')).toHaveText('2 messages discovered');
+  await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(newPosition);
+  for (const text of [...expected.prompts, ...expected.headings]) {
+    await expect(sidebar).not.toContainText(text);
+  }
+  expect(downloads).toBe(0);
+
+  const download = page.waitForEvent('download');
+  await sidebar.locator('[data-action="export-format"]').click();
+  await expect(sidebar.getByRole('button', { name: 'Stop refreshing history' })).toBeVisible();
+  const data = JSON.parse(await readFile(await (await download).path(), 'utf8'));
+  expect(data.url).toBe(page.url());
+  expect(data.turns).toEqual([{
+    prompt: 'Describe a fictional moon',
+    response: '## New moon itinerary\n\nOnly the new conversation belongs in this export.',
+    headings: ['New moon itinerary'],
+    kind: 'exchange',
+    title: 'Describe a fictional moon',
+  }]);
+  expect(data.coverage).toMatchObject({ complete: null, scanStatus: 'finished' });
+  expect(downloads).toBe(1);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  await expect.poll(() => page.locator('.thread-scroll-container').evaluate(el => el.scrollTop)).toBe(newPosition);
 });
 
 for (const prefix of ['/c/', '/g/g-p-fixture/c/']) {

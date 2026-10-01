@@ -3,6 +3,47 @@ import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 import { openOutline } from '../helpers/sidebar';
 
+test('copy prompt and Q&A return full clipboard text with the Markdown toggle on and off', async ({ extensionContext, extensionPage: page }) => {
+  await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
+  await loadScenario(extensionContext, page, 'current-turn-unit');
+  await page.evaluate(() => {
+    document.querySelector('[data-user-message-bubble] .whitespace-pre-wrap')!.textContent = 'Compare **Velora** with `Nareth`.';
+    document.querySelector('[data-markdown-text-style]')!.innerHTML = '<h2>Moon comparison</h2><p>A <strong>silver</strong> moon orbits <code>Velora</code>.</p><h3>Details</h3><p>The imaginary moon is quiet.</p>';
+  });
+  const sidebar = await openOutline(page);
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  const block = sidebar.locator('[data-block-key]').first();
+  const markdownToggle = page.getByRole('menuitemcheckbox', { name: 'Toggle copy markdown' });
+  const formats = [
+    { markdown: false, prompt: 'Compare Velora with Nareth.', response: 'Moon comparison\n\nA silver moon orbits Velora.\n\nDetails\n\nThe imaginary moon is quiet.' },
+    { markdown: true, prompt: 'Compare **Velora** with `Nareth`.', response: '## Moon comparison\n\nA **silver** moon orbits `Velora`.\n\n### Details\n\nThe imaginary moon is quiet.' },
+  ];
+  for (const format of formats) {
+    for (const item of [
+      { name: 'Copy prompt', text: format.prompt },
+      { name: 'Copy Q&A', text: `Q: ${format.prompt}\n\nA: ${format.response}` },
+    ]) {
+      // Clear the previous result so a delayed or missing write cannot pass.
+      await page.evaluate(() => navigator.clipboard.writeText(''));
+      await block.click({ button: 'right' });
+      if (format.markdown && item.name === 'Copy prompt') await markdownToggle.click();
+      await expect(markdownToggle).toHaveAttribute('aria-checked', String(format.markdown));
+      const copy = page.getByRole('button', { name: item.name, exact: true });
+      await expect(copy).toBeEnabled();
+      await copy.click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(item.text);
+      await expect(markdownToggle).toHaveCount(0);
+    }
+  }
+  // Switching back must affect the next copy too, not just the checkbox.
+  await page.evaluate(() => navigator.clipboard.writeText(''));
+  await block.click({ button: 'right' });
+  await markdownToggle.click();
+  await expect(markdownToggle).toHaveAttribute('aria-checked', 'false');
+  await page.getByRole('button', { name: 'Copy Q&A', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`Q: ${formats[0].prompt}\n\nA: ${formats[0].response}`);
+});
+
 test('assistant-only output omits a fabricated user [synthetic state]', async ({ extensionContext, extensionPage }) => {
   await extensionPage.emulateMedia({ reducedMotion: 'reduce' });
   await extensionContext.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://chatgpt.com' });
