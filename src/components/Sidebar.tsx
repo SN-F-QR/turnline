@@ -1371,7 +1371,26 @@ export default function Sidebar({ turns, history, discoverHistory, cancelHistory
                         <>
                     <div className="scroll-pro-sidebar-head">
                         <div className="scroll-pro-sidebar-row">
-                            <span className="scroll-pro-outline-label">All</span>
+                            <div
+                                className="scroll-pro-depth-shortcuts"
+                                role="group"
+                                aria-label="Outline depth shortcuts"
+                                aria-description={`Showing ${depth === 6 ? 'all' : `up to ${depth}`} heading levels per response.`}
+                            >
+                                {[1, 2, 3, 6].map(level => (
+                                    <button
+                                        key={level}
+                                        type="button"
+                                        className="scroll-pro-depth-btn"
+                                        aria-label={level === 6 ? 'Show all heading levels' : `Show up to ${level} heading ${level === 1 ? 'level' : 'levels'}`}
+                                        aria-pressed={depth === level}
+                                        title={level === 6 ? 'Show all heading levels' : `Show up to ${level} heading ${level === 1 ? 'level' : 'levels'} per response`}
+                                        onClick={() => settings.updateDepth(level)}
+                                    >
+                                        {level === 6 ? 'All' : `H${level}`}
+                                    </button>
+                                ))}
+                            </div>
                             <div className="scroll-pro-actions" role="group" aria-label="Chat actions">
                                 <button ref={settingsButtonRef} className="scroll-pro-action-btn" aria-label="Outline settings" aria-expanded="false" onClick={openSettings}>
                                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></svg>

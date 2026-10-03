@@ -24,7 +24,7 @@ async function enableHover(page: Page) {
 test('bulk collapse includes filtered turns, preserves host position and skips hidden headings with Tab', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const sidebar = await openOutline(page);
-    await expect(sidebar.locator('.scroll-pro-outline-label')).toHaveText('All');
+    await expect(sidebar.getByRole('group', { name: 'Outline depth shortcuts' }).getByRole('button')).toHaveText(['H1', 'H2', 'H3', 'All']);
     const position = await page.locator('.thread-scroll-container').evaluate(element => element.scrollTop);
     const filter = sidebar.getByPlaceholder('Filter…');
     await filter.fill('Orbit Beta');
@@ -175,6 +175,20 @@ for (const direction of ['left', 'right'] as const) {
 test('minimum width fits settings controls and a narrow viewport retains the saved width', async ({ extensionContext, extensionPage: page }, testInfo) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     const sidebar = await openOutline(page);
+    await sidebar.getByRole('button', { name: 'Show up to 2 heading levels', exact: true }).click();
+    for (const width of [320, 214]) {
+        await dragOutlineWidth(page, width);
+        await expect.poll(() => sidebar.locator('.scroll-pro-sidebar-row').evaluate(row => {
+            const bounds = row.getBoundingClientRect();
+            return Array.from(row.querySelectorAll('button')).every(control => {
+                const rect = control.getBoundingClientRect();
+                return rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+            });
+        })).toBe(true);
+        await sidebar.screenshot({ path: testInfo.outputPath(`outline-shortcuts-${width}.png`) });
+        await sidebar.getByRole('group', { name: 'Outline depth shortcuts' }).hover();
+        await sidebar.screenshot({ path: testInfo.outputPath(`outline-shortcuts-hover-${width}.png`) });
+    }
     await sidebar.getByRole('button', { name: 'Outline settings' }).click();
     await dragOutlineWidth(page, 214);
     await expect.poll(() => sidebar.evaluate(element => {

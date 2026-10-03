@@ -76,7 +76,7 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await list.evaluate(element => { element.scrollTop = 120; });
     const savedScroll = await list.evaluate(element => element.scrollTop);
-    const toolbarFontSize = await sidebar.locator('.scroll-pro-outline-label').evaluate(element => getComputedStyle(element).fontSize);
+    const toolbarFontSize = await sidebar.locator('.scroll-pro-depth-btn').first().evaluate(element => getComputedStyle(element).fontSize);
 
     const settingsButton = sidebar.getByRole('button', { name: 'Outline settings' });
     await expect(sidebar.locator('.scroll-pro-history-status')).toBeVisible();
@@ -150,14 +150,15 @@ test('F12 settings view preserves outline state and applies appearance preferenc
     await expect(firstItem).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => list.evaluate(element => element.scrollTop)).toBe(savedScroll);
     await expect(firstItem.locator('.scroll-pro-item-title')).toHaveCSS('font-size', '16px');
-    await expect(sidebar.locator('.scroll-pro-outline-label')).toHaveCSS('font-size', toolbarFontSize);
+    await expect(sidebar.locator('.scroll-pro-depth-btn').first()).toHaveCSS('font-size', toolbarFontSize);
 });
 
 test('F12 settings persist across reload and synchronize a second tab', async ({ extensionContext, extensionPage: page }) => {
     await loadScenario(extensionContext, page, 'current-turn-unit');
     await page.getByRole('button', { name: 'Toggle outline' }).click();
+    await page.getByRole('button', { name: 'Show all heading levels' }).click();
     await page.getByRole('button', { name: 'Outline settings' }).click();
-    await page.getByLabel('Outline depth', { exact: true }).selectOption('6');
+    await expect(page.getByLabel('Outline depth', { exact: true })).toHaveValue('6');
     await dragOutlineWidth(page, 357);
     await page.getByRole('button', { name: 'Light', exact: true }).click();
     await page.getByRole('button', { name: 'Purple', exact: true }).click();
@@ -167,6 +168,7 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     const second = await extensionContext.newPage();
     await second.goto(page.url());
     await second.getByRole('button', { name: 'Toggle outline' }).click();
+    await expect(second.getByRole('button', { name: 'Show all heading levels' })).toHaveAttribute('aria-pressed', 'true');
     await second.getByRole('button', { name: 'Outline settings' }).click();
     await expect(second.getByLabel('Outline depth', { exact: true })).toHaveValue('6');
     await expect(second.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '357');
@@ -175,7 +177,9 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await expect(second.getByLabel('Outline text size')).toHaveValue('15');
     await expect(second.getByLabel('Custom theme color hex')).toHaveValue('#0EA5E9');
     await expect(second.getByLabel('Background color hex')).toHaveValue('#FFF7ED');
-    await second.getByLabel('Outline depth', { exact: true }).selectOption('1');
+    await second.getByRole('button', { name: 'Back to outline' }).click();
+    await second.getByRole('button', { name: 'Show up to 1 heading level', exact: true }).click();
+    await second.getByRole('button', { name: 'Outline settings' }).click();
     await dragOutlineWidth(second, 290);
     await second.getByRole('button', { name: 'Dark', exact: true }).click();
     await second.getByLabel('Outline text size').fill('16');
@@ -191,6 +195,7 @@ test('F12 settings persist across reload and synchronize a second tab', async ({
     await expect(page.getByLabel('Background color hex')).toHaveValue('#111827');
     await page.reload();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+;' : 'Control+;');
+    await expect(page.getByRole('button', { name: 'Show up to 1 heading level', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Outline settings' }).click();
     await expect(page.getByLabel('Outline depth', { exact: true })).toHaveValue('1');
     await expect(page.getByRole('separator', { name: 'Outline width' })).toHaveAttribute('aria-valuenow', '290');

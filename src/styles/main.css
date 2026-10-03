@@ -611,19 +611,74 @@
   color: var(--text-secondary);
 }
 
-.scroll-pro-outline-label {
+.scroll-pro-depth-shortcuts {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--accent);
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.scroll-pro-depth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: inherit;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, opacity 120ms ease, min-width 120ms ease, padding 120ms ease;
+}
+
+.scroll-pro-depth-btn:hover {
+  background: var(--hover-overlay);
+  color: var(--text-primary);
+}
+
+.scroll-pro-depth-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.scroll-pro-depth-btn[aria-pressed="true"]:hover {
+  background: var(--accent-highlight);
+  color: var(--accent);
+}
+
+.scroll-pro-depth-shortcuts:has([aria-pressed="true"]):not(:hover):not(:has(:focus-visible)) .scroll-pro-depth-btn[aria-pressed="true"] {
+  background: transparent;
+  color: var(--accent);
+  padding: 0 2px;
+}
+
+.scroll-pro-depth-shortcuts:has([aria-pressed="true"]):not(:hover):not(:has(:focus-visible)) .scroll-pro-depth-btn:not([aria-pressed="true"]) {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scroll-pro-depth-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .scroll-pro-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .scroll-pro-action-btn {
@@ -1715,6 +1770,26 @@
   .scroll-pro-sidebar-row {
     flex-wrap: wrap;
     gap: 6px;
+  }
+}
+
+@container scroll-sidebar (max-width: 260px) {
+  .scroll-pro-sidebar-row {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .scroll-pro-depth-shortcuts {
+    gap: 1px;
+  }
+
+  .scroll-pro-depth-btn {
+    min-width: 20px;
+    padding: 0 2px;
+  }
+
+  .scroll-pro-actions {
+    gap: 4px;
   }
 }
 

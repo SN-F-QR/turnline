@@ -26,6 +26,10 @@ for (const provider of hierarchyProviders) {
     test(`${provider.name} response hierarchy uses consistent depths and indentation across HTML levels`, async ({ extensionContext, extensionPage: page }) => {
         await loadOutlineHierarchy(extensionContext, page, provider);
         const sidebar = await openOutline(page);
+        const shortcuts = sidebar.getByRole('group', { name: 'Outline depth shortcuts' });
+        await expect(shortcuts.getByRole('button')).toHaveText(['H1', 'H2', 'H3', 'All']);
+        await expect(shortcuts).toHaveAccessibleDescription('Showing up to 4 heading levels per response.');
+        await expect(shortcuts.getByRole('button', { pressed: true })).toHaveCount(0);
         await sidebar.getByRole('button', { name: 'Outline settings' }).click();
         const setting = sidebar.getByLabel('Outline depth', { exact: true });
         await expect(setting).toHaveValue('4');
@@ -34,6 +38,7 @@ for (const provider of hierarchyProviders) {
         await expect(sidebar.getByRole('button', { name: 'About outline depth' })).toHaveCSS('cursor', 'default');
         await setting.selectOption('6');
         await sidebar.getByRole('button', { name: 'Back to outline' }).click();
+        await expect(shortcuts.getByRole('button', { name: 'Show all heading levels' })).toHaveAttribute('aria-pressed', 'true');
 
         const paddingByDepth = ['38px', '50px', '62px', '74px', '86px', '98px'];
         for (const [index, scenario] of hierarchyScenarios.entries()) {
@@ -45,7 +50,18 @@ for (const provider of hierarchyProviders) {
         }
 
         for (const depth of [1, 2, 3, 6]) {
-            await setDepth(sidebar, depth);
+            const button = shortcuts.getByRole('button', { name: depth === 6 ? 'Show all heading levels' : `Show up to ${depth} heading ${depth === 1 ? 'level' : 'levels'}`, exact: true });
+            if (depth === 2) {
+                await shortcuts.getByRole('button', { name: 'Show up to 1 heading level', exact: true }).focus();
+                await page.keyboard.press('Tab');
+                await expect(button).toBeFocused();
+                await page.keyboard.press('Enter');
+            } else {
+                await button.click();
+            }
+            await expect(button).toHaveAttribute('aria-pressed', 'true');
+            await expect(shortcuts.getByRole('button', { pressed: true })).toHaveCount(1);
+            await expect(button).toBeFocused();
             for (const [index, scenario] of hierarchyScenarios.entries()) {
                 const headings = sidebar.locator('[data-block-key]').nth(index).locator('[data-outline-level]');
                 await expect(headings).toHaveText(scenario.depths.flatMap((value, i) => value <= depth ? [hierarchyTitle(scenario.id, i)] : []));
