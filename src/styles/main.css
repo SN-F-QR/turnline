@@ -488,7 +488,7 @@
   touch-action: none;
   display: inline-flex;
   align-items: center;
-  transition: transform 140ms var(--ease-slide), border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+  transition: transform 140ms var(--ease-slide), border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, background 140ms ease;
 }
 
 .scroll-pro-toggle-icon:hover {
@@ -496,10 +496,15 @@
   border-color: var(--border-subtle);
   transform: translateY(-1px);
   box-shadow: var(--shadow-app);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--bg-app);
+}
+
+.scroll-pro-toggle-icon:active {
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--bg-app);
 }
 
 .scroll-pro-sidebar-shell.is-open .scroll-pro-toggle-icon {
-  background: var(--bg-item-active);
+  background: linear-gradient(var(--hover-overlay), var(--hover-overlay)), var(--bg-app);
   color: var(--text-primary);
   border-color: var(--border-subtle);
   transform: scale(0.98);
@@ -635,9 +640,10 @@
 }
 
 .scroll-pro-action-btn:hover,
+.scroll-pro-action-btn:active,
 .scroll-pro-action-btn.is-active {
   color: var(--text-primary);
-  background: var(--bg-item-active);
+  background: var(--hover-overlay);
 }
 
 .scroll-pro-action-btn.is-saving {
@@ -812,15 +818,10 @@
   color: var(--text-secondary);
 }
 
-.scroll-pro-collapse-btn:hover {
+.scroll-pro-collapse-btn:hover,
+.scroll-pro-collapse-btn:active {
   color: var(--text-primary) !important;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-@media (prefers-color-scheme: light) {
-  .scroll-pro-collapse-btn:hover {
-    background: rgba(0, 0, 0, 0.08);
-  }
+  background: var(--hover-overlay);
 }
 
 .scroll-pro-collapse-btn:focus-visible {
@@ -903,7 +904,9 @@
 
 /* Hover is a quiet, temporary cue; reading position owns the text emphasis. */
 .scroll-pro-item-header:hover,
-.scroll-pro-subheading:hover {
+.scroll-pro-item-header:active,
+.scroll-pro-subheading:hover,
+.scroll-pro-subheading:active {
   background: var(--hover-overlay);
 }
 
@@ -981,12 +984,13 @@
 
 .scroll-pro-context-item:focus {
   outline: none;
-  background: var(--bg-item-active);
+  background: var(--hover-overlay);
   color: var(--text-primary);
 }
 
-.scroll-pro-context-item:hover:not(:disabled) {
-  background: var(--bg-item-active);
+.scroll-pro-context-item:hover:not(:disabled),
+.scroll-pro-context-item:active:not(:disabled) {
+  background: var(--hover-overlay);
   color: var(--text-primary);
 }
 
@@ -1174,8 +1178,9 @@
   color: var(--text-secondary);
 }
 
-.scroll-pro-btn-ghost:hover {
-  background: var(--bg-item-active);
+.scroll-pro-btn-ghost:hover,
+.scroll-pro-btn-ghost:active {
+  background: var(--hover-overlay);
   color: var(--text-primary);
 }
 
@@ -1220,7 +1225,8 @@
   transition: color 120ms ease, background 120ms ease;
 }
 
-.scroll-pro-settings-back:hover {
+.scroll-pro-settings-back:hover,
+.scroll-pro-settings-back:active {
   background: var(--hover-overlay);
   color: var(--text-primary);
 }
@@ -1437,7 +1443,8 @@
   white-space: nowrap;
 }
 
-.scroll-pro-setting-options button:hover {
+.scroll-pro-setting-options button:hover,
+.scroll-pro-setting-options button:active {
   color: var(--text-primary);
   background: var(--hover-overlay);
 }
@@ -1574,7 +1581,8 @@
   transition: color 120ms ease, background 120ms ease;
 }
 
-.scroll-pro-field-clear:hover {
+.scroll-pro-field-clear:hover,
+.scroll-pro-field-clear:active {
   background: var(--hover-overlay);
   color: var(--text-primary);
 }
@@ -1609,7 +1617,8 @@
   transition: background 120ms ease, color 120ms ease;
 }
 
-.scroll-pro-stepper-btn:hover:not(:disabled) {
+.scroll-pro-stepper-btn:hover:not(:disabled),
+.scroll-pro-stepper-btn:active:not(:disabled) {
   background: var(--hover-overlay);
   color: var(--text-primary);
 }
@@ -1728,9 +1737,10 @@
   cursor: pointer;
 }
 .scroll-pro-history-control:hover,
+.scroll-pro-history-control:active,
 .scroll-pro-history-control:focus-visible {
   color: var(--text-primary);
-  background: var(--bg-item-active);
+  background: var(--hover-overlay);
 }
 .scroll-pro-history-control:disabled {
   opacity: 0.4;
