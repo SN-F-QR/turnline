@@ -1,0 +1,10 @@
+{
+  "scenario": "writing-blocks",
+  "source": "Minimal structural projection of writing blocks inspected through Computer Use in logged-in Chrome on 2026-10-14.",
+  "capturedAt": "2026-10-14",
+  "pageType": "ChatGPT /c/<sanitized>",
+  "capture": "Detached elements were reconstructed in DevTools from the observed editor-to-surface ancestor chain, preserving only allowlisted structural attributes. The old block has aria-hidden=true on a clipped ancestor, a noneditable ProseMirror textbox, and H2/H3 headings. The latest block has the same ancestor chain without aria-hidden and an editable, empty textbox.",
+  "sanitization": "All source text was discarded before HTML output. Original heading text was replaced with invented labels. Conversation wrappers and keys, prompts, response notes and current-draft headings are synthetic. No original conversation IDs, account data, copy-text attributes, document titles, URLs, scripts or assets were saved.",
+  "layout": "Synthetic offline reverse scroller. Collapsed content is clipped rather than unmounted or display:none, preserving the condition that caused the bug.",
+  "limitation": "Reduced DOM reproduction, not a full-page capture. Current-draft headings and attribute-only fold/unfold transitions are synthetic; no live conversation was edited or submitted."
+}

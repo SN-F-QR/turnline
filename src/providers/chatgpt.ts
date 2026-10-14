@@ -19,8 +19,9 @@ const headingList = (content: HTMLElement) => {
     // DIL cards use heading tags for visual emphasis (product names, stats, etc.).
     // Keep the renderer's document headings, but omit headings inside its boxes.
     // Logged-in responses do not have the share page's widget-copy-target wrapper.
+    // Folded writing blocks keep their headings mounted inside aria-hidden content.
     const headings = Array.from(content.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'))
-        .filter(heading => !heading.closest('[data-d-component="box"]'))
+        .filter(heading => !heading.closest('[data-d-component="box"], [aria-hidden="true"]'))
         .map((heading, index) => {
             const text = (heading.innerText || heading.textContent || '').trim();
             return { innerText: text || `Section ${index + 1}`, element: heading, tagName: heading.tagName, isPlaceholder: !text };

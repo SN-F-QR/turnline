@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 
-export type ScenarioName = 'current-turn-unit' | 'long-response-l01' | 'long-response-l02';
+export type ScenarioName = 'current-turn-unit' | 'writing-blocks' | 'long-response-l01' | 'long-response-l02';
 
 type CurrentExpected = {
   roles: string[];
@@ -30,7 +30,7 @@ type LongL01Expected = { cold: SnapshotExpected; loaded: SnapshotExpected };
 
 const fixtureRoot = resolve(process.cwd(), 'tests/fixtures/chatgpt');
 
-export async function loadScenario(context: BrowserContext, page: Page, name: 'current-turn-unit'): Promise<CurrentExpected>;
+export async function loadScenario(context: BrowserContext, page: Page, name: 'current-turn-unit' | 'writing-blocks'): Promise<CurrentExpected>;
 export async function loadScenario(context: BrowserContext, page: Page, name: 'long-response-l01'): Promise<LongL01Expected>;
 export async function loadScenario(context: BrowserContext, page: Page, name: 'long-response-l02'): Promise<SnapshotExpected>;
 export async function loadScenario(context: BrowserContext, page: Page, name: ScenarioName) {
@@ -42,7 +42,7 @@ export async function loadScenario(context: BrowserContext, page: Page, name: Sc
   ]);
   // Keep the URL consistent with the sanitized conversation identity in the DOM.
   const conversationId = html.match(/data-chatgpt-selection-conversation-id="(?:local-chatgpt:)?([^"]+)"/)![1];
-  const url = name === 'current-turn-unit'
+  const url = name === 'current-turn-unit' || name === 'writing-blocks'
     ? `https://chatgpt.com/c/${conversationId}`
     : `https://chatgpt.com/g/g-p-fixture/c/${conversationId}`;
   await context.route('**/*', async (route) => {

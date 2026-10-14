@@ -1,0 +1,10 @@
+/* Synthetic offline layout; folded content stays mounted and has client rects. */
+html, body { margin: 0; height: 100%; font: 16px system-ui; }
+main { height: 100vh; }
+.thread-scroll-container { height: 360px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+.thread-scroll-container > div { min-height: 100%; width: 100%; flex-shrink: 0; }
+[data-turn-key] { box-sizing: border-box; min-height: 300px; padding: 24px; border-bottom: 1px solid #ddd; }
+[data-markdown-text-style] { max-width: 720px; }
+[data-oai-writing-block-surface] { border: 1px solid #ddd; padding: 12px; }
+.max-h-24 { max-height: 96px; }
+.overflow-hidden { overflow: hidden; }

@@ -2,6 +2,50 @@ import { test, expect } from './extension.fixture';
 import { loadScenario } from '../helpers/scenario';
 import { openOutline } from '../helpers/sidebar';
 
+test('ChatGPT writing blocks omit folded draft headings and keep the current draft navigable', async ({ extensionContext, extensionPage: page }) => {
+  const expected = await loadScenario(extensionContext, page, 'writing-blocks');
+  const sidebar = await openOutline(page);
+  await expect(sidebar.locator('.scroll-pro-item-title')).toHaveText(expected.prompts);
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(expected.headings);
+  for (const title of expected.absentText!) {
+    await expect(sidebar.getByRole('button', { name: title, exact: true })).toHaveCount(0);
+  }
+  // Clipping leaves the old headings mounted with layout boxes; rect checks
+  // alone cannot distinguish this state from a usable document heading.
+  expect(await page.locator('[aria-hidden="true"] h2, [aria-hidden="true"] h3').evaluateAll(nodes =>
+    nodes.every(node => node.getClientRects().length > 0)
+  )).toBe(true);
+  await sidebar.getByRole('button', { name: 'Current draft section 2', exact: true }).click();
+  await expect.poll(() => page.getByRole('heading', { name: 'Current draft section 2', exact: true }).evaluate(heading => {
+    const target = heading.getBoundingClientRect();
+    const scroller = heading.closest('.thread-scroll-container')!.getBoundingClientRect();
+    return target.top >= scroller.top && target.top < scroller.bottom;
+  })).toBe(true);
+});
+
+test('ChatGPT writing block attribute-only folding removes cached headings and unfolding restores them', async ({ extensionContext, extensionPage: page }) => {
+  const expected = await loadScenario(extensionContext, page, 'writing-blocks');
+  const sidebar = await openOutline(page);
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(expected.headings);
+  // Wait for history retention, then change only aria-hidden. No text, child
+  // nodes or observed message keys change to incidentally trigger a reparse.
+  await expect(sidebar.getByRole('button', { name: 'Refresh history' })).toBeVisible();
+  const current = page.locator('[data-oai-writing-block-surface]').last();
+  await current.evaluate(surface => surface.firstElementChild!.firstElementChild!.setAttribute('aria-hidden', 'true'));
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(['Original response notes', 'Latest response notes']);
+  await expect(page.locator('.writing-block-editor h2, .writing-block-editor h3')).toHaveCount(4);
+  await current.evaluate(surface => surface.firstElementChild!.firstElementChild!.setAttribute('aria-hidden', 'false'));
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(expected.headings);
+
+  const archived = page.locator('[data-oai-writing-block-surface]').first();
+  await archived.evaluate(surface => surface.firstElementChild!.firstElementChild!.removeAttribute('aria-hidden'));
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText([
+    'Original response notes', ...expected.absentText!, 'Latest response notes', 'Current draft section 1', 'Current draft section 2',
+  ]);
+  await archived.evaluate(surface => surface.firstElementChild!.firstElementChild!.setAttribute('aria-hidden', 'true'));
+  await expect(sidebar.locator('.scroll-pro-subheading')).toHaveText(expected.headings);
+});
+
 test('current ChatGPT capture: turns, headings, search, and navigation', async ({ extensionContext, extensionPage }) => {
   const expected = await loadScenario(extensionContext, extensionPage, 'current-turn-unit');
   await expect(extensionPage.locator('[data-turn-key]')).toHaveCount(2);

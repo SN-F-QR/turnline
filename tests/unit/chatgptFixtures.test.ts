@@ -48,3 +48,24 @@ test('L02 fixture retains five long-response turns without external resources', 
   assert.equal(page.contentUnits, checks.contentUnits);
   assertSafeOfflineHtml(page.html);
 });
+
+test('writing-block fixture contains only invented text and offline structural attributes', async () => {
+  const [page, checks] = await Promise.all([
+    snapshot('writing-blocks', 'page.html'),
+    expected<{ prompts: string[]; headings: string[]; absentText: string[] }>('writing-blocks'),
+  ]);
+  assertSafeOfflineHtml(page.html);
+  assert.doesNotMatch(page.html, /https?:|\b[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\b|\b(?:src|on\w+|data-markdown-copy-text|data-chatgpt-selection-message-id)=/i);
+  assert.deepEqual(page.turnKeys, ['fixture-writing-turn-1', 'fixture-writing-turn-2']);
+  assert.equal(page.contentUnits, 4);
+  const allowedText = new Set([
+    'Fictional draft revisions - ChatGPT',
+    'This fictional response contains a previous draft.',
+    'The response itself remains available.',
+    'This fictional response contains the current draft.',
+    ...checks.prompts, ...checks.headings, ...checks.absentText,
+  ]);
+  for (const text of page.html.replace(/<[^>]*>/g, '\n').split('\n').map(text => text.trim()).filter(Boolean)) {
+    assert(allowedText.has(text), `Unexpected fixture text: ${text}`);
+  }
+});

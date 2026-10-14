@@ -185,7 +185,7 @@ export function useChatTurns(isOpen: boolean) {
                 turnObserver.observe(nextContainer, {
                     childList: true, characterData: true, subtree: true,
                     attributes: true,
-                    attributeFilter: ['data-turn-key', 'data-turn-id', 'data-message-id', 'data-turn', 'data-content-search-unit-key', 'data-chatgpt-selection-conversation-id', 'data-message-author-role', 'data-markdown-text-style', 'data-user-message-bubble', 'href', 'src', 'alt'],
+                    attributeFilter: ['data-turn-key', 'data-turn-id', 'data-message-id', 'data-turn', 'data-content-search-unit-key', 'data-chatgpt-selection-conversation-id', 'data-message-author-role', 'data-markdown-text-style', 'data-user-message-bubble', 'aria-hidden', 'href', 'src', 'alt'],
                 });
                 scheduleParse();
             }

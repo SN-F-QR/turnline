@@ -1,0 +1,7 @@
+{
+  "roles": ["user", "assistant", "user", "assistant"],
+  "prompts": ["Draft an imaginary lunar garden plan", "Revise the fictional garden draft"],
+  "headings": ["Original response notes", "Latest response notes", "Current draft section 1", "Current draft section 2"],
+  "responses": [],
+  "absentText": ["Archived draft section 1", "Archived draft section 2"]
+}
